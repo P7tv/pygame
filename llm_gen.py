@@ -1,51 +1,91 @@
-import json, re, textwrap
-from openai import OpenAI
+import json, os, re, textwrap
+from pathlib import Path
+
+import google.generativeai as genai  # type: ignore
+
 from config import DIALECTS
 
-# ---- ตั้งค่าตรงนี้ ----
-API_KEY   = "sk-VL6FVfEvqs8uY4fo5CfiKqnG6Wy2Kf2jwrXC3HQjGEPemPmR"
-BASE_URL  = "https://api.opentyphoon.ai/v1"
-MODEL     = "typhoon-v2.1-12b-instruct"
-# -----------------------
+def _resolve_google_api_key() -> str:
+    key = os.getenv("GOOGLE_API_KEY")
+    if key:
+        return key
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if not line or line.strip().startswith("#"):
+                continue
+            if "GOOGLE_API_KEY" not in line:
+                continue
+            _, _, value = line.partition("=")
+            value = value.strip().strip('"').strip("'")
+            if value:
+                return value
+    raise RuntimeError("GOOGLE_API_KEY not found in environment or .env file")
 
-client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
+API_KEY = None
+MODEL = None
+_model = None
+
+API_KEY = _resolve_google_api_key()
+MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-2.5-flash")
+genai.configure(api_key=API_KEY)
+_model = genai.GenerativeModel(model_name=MODEL)
 
 def _extract_json(s: str) -> str:
     m = re.search(r"\[[\s\S]*\]", s)
     return m.group(0) if m else s
 
 def generate(topic: str, n: int = 8):
-    # เพิ่มความซับซ้อนของ prompt โดยเน้นการใช้สำนวนภาษาถิ่นที่หลากหลาย
+    if _model is None:
+        raise RuntimeError("Gemini model is not configured")
+    # Prompt แนว Duolingo: กะทัดรัด ชัดเจน และชวนให้พูดออกเสียง
     system = textwrap.dedent(f"""
-    คุณคือผู้ช่วยสร้างบทเรียนภาษาไทยถิ่นสำหรับเกม โดยเน้นโหมด 'พูดล้วน' ที่ท้าทายและสร้างสรรค์
-    คืนค่าเป็น JSON เท่านั้น (ห้ามมีคำอธิบายหรือโค้ดบล็อกใดๆ ทั้งสิ้น)
-    ตัวอย่าง:
+    คุณคือผู้ออกแบบบทเรียนสไตล์ Duolingo สำหรับเกมฝึกพูดภาษาถิ่นไทย โฟกัสโหมด "พูดล้วน"
+    แนวทางสำคัญ:
+    - คืนค่าเป็น JSON เท่านั้น (ห้ามมีคำบรรยายเพิ่มเติมหรือโค้ดบล็อก)
+    - สร้าง prompt ไม่เกิน 60 ตัวอักษร ใช้น้ำเสียงกระตุ้นให้ฝึกพูดแบบสนุก เป็นกันเอง
+    - แทรกหัวข้อที่ได้รับลงใน prompt โดยตรง (ห้ามใช้สัญลักษณ์ปีกกา {{ }})
+    - targets ของแต่ละภาคต้องเป็นคำศัพท์หรือวลีสั้นที่คนท้องถิ่นใช้จริงเกี่ยวกับหัวข้อ (ไม่ใช่ประโยคยาว)
+    - ให้แต่ละ dialect มี 2 หรือ 3 คำ ไม่เว้นวรรคแปลกๆ ในคำภาษาไทย
+    - หากคำศัพท์ของภาคไหนตรงกับภาษากลาง ให้เลือกคำที่ชาวบ้านใช้จริงหรือคำเรียกเฉพาะถิ่น
+    ตัวอย่าง (หัวข้อ "{topic}"):
     [
       {{
-        "prompt": "จงใช้สำนวนภาษาถิ่นของคุณอธิบายว่า 'การได้กินอาหารอร่อยหลังจากทำงานเหนื่อยมาทั้งวัน' เป็นอย่างไร",
+        "prompt": "พูดคำท้องถิ่นที่ใช้บ่อยเกี่ยวกับ {topic}",
         "targets": {{
-          "central": ["กินของอร่อยหลังเลิกงาน"],
-          "northern": ["กิ๋นข้าวลำหลังเลิกงาน"],
-          "isan": ["กินเข่าแซบๆ หลังเลิกงาน"],
-          "southern": ["กินข้าวหรอยๆ หลังเลิกงาน"]
+          "central": ["ทำ", "พูด", "กิน"],
+          "northern": ["ยะ", "ฮ้อง", "กิ๋น"],
+          "isan": ["เฮ็ด", "เว้า", "กิน"],
+          "southern": ["ทํา", "แหลง", "กินข้าว"]
         }}
       }}
     ]
-    คำแนะนำ:
-    - สร้างบทเรียนที่เน้นการใช้สำนวนภาษาถิ่นที่หลากหลายและน่าสนใจ
-    - กระตุ้นให้ผู้เล่นคิดและใช้ภาษาถิ่นอย่างสร้างสรรค์
-    - โจทย์ควรมีความท้าทายแต่ไม่ยากเกินไป
-    - อย่าลืมว่าต้องคืนค่าเป็น JSON เท่านั้น
-    สร้าง {n} ข้อ โดยมีหัวข้อหลักคือ '{topic}'
+    สร้างโจทย์ {n} ข้อ โดยทุกข้อเชื่อมโยงกับหัวข้อ '{topic}'
     """)
     user = f"สร้างบทเรียน {n} ข้อ สำหรับหัวข้อ: {topic}"
 
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role":"system","content":system},{"role":"user","content":user}],
-        temperature=0.2, max_tokens=2048
+    prompt = f"{system}\n\n{user}"
+    resp = _model.generate_content(
+        prompt,
+        generation_config=genai.types.GenerationConfig(
+            temperature=0.2,
+            max_output_tokens=2048,
+            response_mime_type="application/json",
+        ),
     )
-    raw = resp.choices[0].message.content.strip()
+    raw_text = resp.text
+    if not raw_text:
+        for cand in getattr(resp, "candidates", []):
+            for part in getattr(getattr(cand, "content", None), "parts", []):
+                text = getattr(part, "text", None)
+                if text:
+                    raw_text = text
+                    break
+            if raw_text:
+                break
+    raw = (raw_text or "").strip()
+    if not raw:
+        raise ValueError("Gemini response is empty")
     data = json.loads(_extract_json(raw))
 
     # เพิ่ม dialect ที่ขาดให้ครบ

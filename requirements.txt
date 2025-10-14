@@ -4,4 +4,4 @@ sounddevice
 soundfile
 numpy
 rapidfuzz
-openai
+google-generativeai
