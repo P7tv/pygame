@@ -31,6 +31,42 @@ MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-2.5-flash")
 genai.configure(api_key=API_KEY)
 _model = genai.GenerativeModel(model_name=MODEL)
 
+RETRYABLE_FINISH_REASONS = {"MAX_TOKENS"}
+MAX_ATTEMPTS = 3
+
+
+def _parse_response(resp):
+    raw_text = None
+    finish_reasons = []
+    safety_hits = []
+    for cand in getattr(resp, "candidates", []) or []:
+        finish = getattr(cand, "finish_reason", None)
+        if finish is not None:
+            finish_name = (
+                finish.name if hasattr(finish, "name") else str(finish)
+            )
+            finish_reasons.append(finish_name)
+        ratings = getattr(cand, "safety_ratings", None) or []
+        if ratings:
+            safety_hits.append(
+                ", ".join(
+                    f"{getattr(r, 'category', 'unknown')}={getattr(r, 'probability', 'unknown')}"
+                    for r in ratings
+                )
+            )
+        content = getattr(cand, "content", None)
+        if not content:
+            continue
+        for part in getattr(content, "parts", []):
+            text = getattr(part, "text", None)
+            if text:
+                raw_text = text
+                break
+        if raw_text:
+            break
+    return raw_text, finish_reasons, safety_hits
+
+
 def _extract_json(s: str) -> str:
     m = re.search(r"\[[\s\S]*\]", s)
     return m.group(0) if m else s
@@ -65,25 +101,42 @@ def generate(topic: str, n: int = 8):
     user = f"สร้างบทเรียน {n} ข้อ สำหรับหัวข้อ: {topic}"
 
     prompt = f"{system}\n\n{user}"
-    resp = _model.generate_content(
-        prompt,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.2,
-            max_output_tokens=2048,
-            response_mime_type="application/json",
-        ),
-    )
-    raw_text = resp.text
-    if not raw_text:
-        for cand in getattr(resp, "candidates", []):
-            for part in getattr(getattr(cand, "content", None), "parts", []):
-                text = getattr(part, "text", None)
-                if text:
-                    raw_text = text
-                    break
-            if raw_text:
-                break
-    raw = (raw_text or "").strip()
+    attempt = 0
+    max_tokens = 2048
+    last_finish = []
+    last_safety = []
+    raw_text = None
+    while attempt < MAX_ATTEMPTS:
+        resp = _model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.2,
+                max_output_tokens=max_tokens,
+                response_mime_type="application/json",
+            ),
+        )
+        raw_text, finish_reasons, safety_hits = _parse_response(resp)
+        if raw_text:
+            break
+        last_finish = finish_reasons
+        last_safety = safety_hits
+        attempt += 1
+        retryable = any(
+            reason in RETRYABLE_FINISH_REASONS for reason in finish_reasons
+        )
+        if retryable and "MAX_TOKENS" in finish_reasons:
+            max_tokens = min(max_tokens + 1024, 4096)
+            continue
+        else:
+            break
+    if raw_text is None:
+        reason_msg = ", ".join(last_finish) if last_finish else "NONE"
+        safety_msg = "; ".join(last_safety) if last_safety else "NONE"
+        raise RuntimeError(
+            "Gemini response contains no text "
+            f"(finish_reason={reason_msg}; safety={safety_msg})"
+        )
+    raw = raw_text.strip()
     if not raw:
         raise ValueError("Gemini response is empty")
     data = json.loads(_extract_json(raw))
