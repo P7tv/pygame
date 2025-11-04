@@ -1,38 +1,29 @@
-# UI & Game
-WIDTH, HEIGHT, FPS = 1280, 720, 60
-BG, FG = (40, 40, 60), (230, 230, 230)  # สีพื้นหลังและสีตัวอักษร
-ACCENT, WARN, MUTED, CARD, PROGRESS = (100,220,140), (255,120,120), (130,130,150), (50,50,70), (140,180,255)  # สีเน้นต่างๆ
+WIDTH, HEIGHT = 800, 600
+FPS = 60
+FONT_PATH = "assets/fonts/ThaiSansNeue-Black.ttf"
 
-SAVE_PATH = "save.json"
-# ใส่ฟอนต์ไทยจะสวยกว่า (เช่น NotoSansThai). ถ้าไม่มีก็ปล่อย None
-FONT_PATH = None # "assets/fonts/NotoSansThai-Regular.ttf"
+# Colors
+WHITE = (255, 255, 255)
+GRAY = (245, 247, 250)
+GREEN = (88, 204, 2)
+BLUE = (28, 176, 246)
+RED = (239, 68, 68)
+YELLOW = (251, 191, 36)
+BLACK = (0, 0, 0)
+ORANGE = (251, 191, 36)
+PINK = (255, 99, 132)
 
-# ASR (Whisper)
-ASR_ENABLED = True
-ASR_MODEL_SIZE = "small" # "tiny"/"base"/"small"/"medium"
-ASR_LANGUAGE = "th"
-ASR_THRESHOLD_OK = 85
-ASR_THRESHOLD_PARTIAL = 70
+# ASR Config
 SAMPLE_RATE = 16000
 CHANNELS = 1
-MAX_SPEAK_SECONDS = 4.0
+MAX_SPEAK_SECONDS = 5
+ASR_THRESHOLD_OK = 85
+ASR_THRESHOLD_PARTIAL = 65
 
-# Dialects
-DIALECTS = ["central","northern","isan","southern"]
+# Dialect labels
 DIALECT_LABELS = {
-"central":"กลาง",
-"northern":"เหนือ (คำเมือง)",
-"isan":"อีสาน",
-"southern":"ใต้",
-}
-NORMALIZE_MAP = {
-"northern": {
-"กิ๋น":"กิน", "จ๊าด":"มาก", "ลำ":"อร่อย", "ปิ๊ก":"กลับ", "ตี้":"ที่", "ยะ":"ทำ", "ละอ่อน":"เด็ก",
-},
-"isan": {
-"แซบ":"อร่อย", "เด้อ":"", "จัก":"สัก", "อยู่บ่":"อยู่ไหม", "บ่":"ไม่", "หลาย":"มาก", "เข่า":"ข้าว",
-},
-"southern": {
-"หรอย":"อร่อย", "นิ":"นี่", "แล":"ดู", "พรือ":"อย่างไร", "หม้าย":"ไหม", "หล่าว":"แล้ว",
-},
+    "central": "ภาคกลาง",
+    "northern": "ภาคเหนือ",
+    "isan": "อีสาน",
+    "southern": "ภาคใต้"
 }

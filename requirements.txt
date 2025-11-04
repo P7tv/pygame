@@ -1,7 +1,16 @@
-pygame
-faster-whisper
-sounddevice
-soundfile
-numpy
-rapidfuzz
-google-generativeai
+# Core
+pygame>=2.5.2
+sounddevice>=0.4.6
+numpy>=2.3.0
+scipy>=1.16.0
+pydub>=0.25.1
+speechrecognition>=3.10.0
+rapidfuzz>=3.10.0
+
+# AI / ASR
+transformers>=4.44.0
+torch>=2.4.0
+torchaudio>=2.4.0
+
+# Optional (ช่วยให้ PyTorch ใช้ GPU ได้ดีขึ้น ถ้ามี)
+accelerate>=0.33.0
