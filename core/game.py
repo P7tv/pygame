@@ -10,7 +10,16 @@ class Game:
         self.running = True
         self.current_scene = None
         self.scene_map = scenes
-        self.state = {"xp": 0, "streak": 0, "best_streak": 0, "hearts": 3, "dialect": "central"}
+        self.state = {
+            "xp": 0,
+            "streak": 0,
+            "best_streak": 0,
+            "hearts": 3,
+            "dialect": DIALECTS[0],
+            "category": DEFAULT_CATEGORY_KEY,
+        }
+        self.dialect = self.state["dialect"]
+        self.category = self.state["category"]
         self.switch_scene("MENU")
 
     def switch_scene(self, name):

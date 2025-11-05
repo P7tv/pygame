@@ -1,9 +1,11 @@
+import os
 import pygame, random, time, math
 from core.ui import Button, draw_status, HeaderUI, ProgressBar, Chip
 from config import *
-from core.data_loader import load_lessons
+from core.data_loader import category_path, load_lessons, save_lessons
 from core.audio import Recorder, PathummaASR
 from rapidfuzz import fuzz
+from ai.llm_gen import generate_lessons
 
 class MenuScene:
     def __init__(self, game):
@@ -63,7 +65,36 @@ class LessonScene:
         self.screen = game.screen
         self.font = pygame.font.Font(FONT_PATH, 32)
         self.smallfont = pygame.font.Font(FONT_PATH, 22)
-        self.cards = load_lessons("data/lessons_default.json")
+        self.category_key = self.game.state.get("category", DEFAULT_CATEGORY_KEY)
+        self.category_label = next(
+            (c["label"] for c in CONTENT_CATEGORIES if c["key"] == self.category_key),
+            self.category_key,
+        )
+        self.category_file = category_path(self.category_key)
+        self.generation_error: str | None = None
+
+        self.cards = []
+        self.lesson_source = ""
+        try:
+            if not os.path.exists(self.category_file):
+                generated = generate_lessons(self.category_key, LESSON_COUNT)
+                save_lessons(self.category_file, generated)
+                self.cards = list(generated)
+                self.lesson_source = self.category_file
+        except Exception as exc:
+            self.generation_error = str(exc)
+
+        if not self.cards:
+            try:
+                self.cards, self.lesson_source = load_lessons(
+                    category_key=self.category_key,
+                    preferred=self.category_file,
+                )
+            except FileNotFoundError as exc:
+                raise RuntimeError(
+                    "ไม่พบข้อมูลบทเรียนและไม่สามารถสร้างบทเรียนใหม่ได้"
+                ) from exc
+        self.cards = list(self.cards)
         random.shuffle(self.cards)
         self.index = 0
         self.asr = PathummaASR()
@@ -72,8 +103,13 @@ class LessonScene:
         self.feedback = None
         self.hearts = 3
         self.xp = 0
-        self.streak = game.streak if hasattr(game, "streak") else 0
-        self.dialect = getattr(game, "dialect", "central")
+        self.streak = self.game.state.get("streak", 0)
+        self.dialect = self.game.state.get("dialect", DIALECTS[0])
+        self.game.state["dialect"] = self.dialect
+        self.game.dialect = self.dialect
+        self.cards_total = len(self.cards)
+        if self.cards_total == 0:
+            raise RuntimeError("ไม่พบบทเรียนที่ใช้งานได้")
         self.header = HeaderUI(self.xp, self.streak, self.hearts, self.dialect, self.index, len(self.cards))
         self.last_action_msg = ""
         self.last_action_time = 0
@@ -121,8 +157,13 @@ class LessonScene:
                             else:
                                 self.hearts -= 1
                                 self.streak = 0
+                            self.game.state["xp"] = self.xp
+                            self.game.state["streak"] = self.streak
+                            self.game.state["hearts"] = self.hearts
                             self.index += 1
                             if self.index >= len(self.cards) or self.hearts <= 0:
+                                self.game.state["streak"] = self.streak
+                                self.game.state["xp"] = self.xp
                                 self.game.streak = self.streak
                                 self.game.xp = self.xp
                                 return "SUMMARY"
@@ -130,6 +171,21 @@ class LessonScene:
             self.screen.fill(WHITE)
             self.header.update(self.xp, self.streak, self.hearts, self.dialect, self.index, len(self.cards))
             self.header.draw(self.screen)
+
+            category_txt = self.smallfont.render(f"หมวดหมู่: {self.category_label}", True, BLUE)
+            self.screen.blit(category_txt, (60, 68))
+            message_y = 100
+            if self.generation_error:
+                error_txt = self.smallfont.render(
+                    f"⚠️ สร้างบทเรียนไม่สำเร็จ: {self.generation_error}", True, RED
+                )
+                self.screen.blit(error_txt, (60, message_y))
+                message_y += 30
+            elif self.lesson_source.endswith("lessons_default.json"):
+                info = self.smallfont.render(
+                    "⚠️ ใช้บทเรียนสำรอง (ยังไม่มีบทเรียนที่ LLM สร้าง)", True, ORANGE
+                )
+                self.screen.blit(info, (60, message_y))
 
             card = self.cards[self.index]
             # Card UI

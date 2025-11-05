@@ -11,6 +11,8 @@ rapidfuzz>=3.10.0
 transformers>=4.44.0
 torch>=2.4.0
 torchaudio>=2.4.0
+google-generativeai>=0.8.5
+faster-whisper>=1.0.1
 
 # Optional (ช่วยให้ PyTorch ใช้ GPU ได้ดีขึ้น ถ้ามี)
 accelerate>=0.33.0
