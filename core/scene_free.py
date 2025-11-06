@@ -36,6 +36,9 @@ class FreeSpeakScene:
         while True:
             for e in pygame.event.get():
                 if e.type == pygame.QUIT: return "EXIT"
+                if e.type == pygame.VIDEORESIZE:
+                    self.game.handle_resize(e)
+                    continue
                 for f in self.fields.values(): f.handle(e)
                 if e.type == pygame.MOUSEBUTTONDOWN:
                     if self.send_button.rect.collidepoint(e.pos):
@@ -127,7 +130,7 @@ class FreeSpeakScene:
                 fb_text = self.smallfont.render(f"คุณพูดว่า: {spoken}  (คะแนน {score:.1f})", True, GREEN)
                 self.screen.blit(fb_text, (120, convo_rect.bottom + 20))
 
-            pygame.display.flip()
+            self.game.present()
             clock.tick(FPS)
 
     def _trigger_ai(self):
@@ -140,7 +143,7 @@ class FreeSpeakScene:
         self.conversation.append(("คุณ", message))
         self.fields["prompt"].text = ""
         self.ai_thinking = True
-        pygame.display.flip()
+        self.game.present()
         pygame.event.pump()
         try:
             reply = roleplay_response(message, self.dialect, history)

@@ -27,6 +27,9 @@ class MenuScene:
         while True:
             for e in pygame.event.get():
                 if e.type == pygame.QUIT: return "EXIT"
+                if e.type == pygame.VIDEORESIZE:
+                    self.game.handle_resize(e)
+                    continue
                 if e.type == pygame.MOUSEBUTTONDOWN:
                     for i, btn in enumerate(self.dialect_btns):
                         if btn.rect.collidepoint(e.pos):
@@ -56,7 +59,7 @@ class MenuScene:
             self.start_btn.draw(self.screen, self.btnfont, hovered=self.start_btn.rect.collidepoint(pygame.mouse.get_pos()))
             self.free_btn.draw(self.screen, self.btnfont, hovered=self.free_btn.rect.collidepoint(pygame.mouse.get_pos()))
 
-            pygame.display.flip()
+            self.game.present()
             clock.tick(FPS)
 
 class LessonScene:
@@ -132,6 +135,9 @@ class LessonScene:
         while True:
             for e in pygame.event.get():
                 if e.type == pygame.QUIT: return "EXIT"
+                if e.type == pygame.VIDEORESIZE:
+                    self.game.handle_resize(e)
+                    continue
                 if e.type == pygame.KEYDOWN:
                     if e.key == pygame.K_ESCAPE: return "MENU"
                     if e.key == pygame.K_m:
@@ -236,5 +242,5 @@ class LessonScene:
             # Progress bar
             ProgressBar(self.index, len(self.cards)).draw(self.screen, WIDTH//2-180, HEIGHT-60, 360, 24)
 
-            pygame.display.flip()
+            self.game.present()
             clock.tick(FPS)

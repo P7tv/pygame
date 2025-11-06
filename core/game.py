@@ -5,7 +5,10 @@ class Game:
     def __init__(self, scenes):
         pygame.init()
         pygame.display.set_caption("🦉 Duolingo Thai Dialects")
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        self.base_size = (WIDTH, HEIGHT)
+        self.display = pygame.display.set_mode(self.base_size, pygame.RESIZABLE)
+        self.canvas = pygame.Surface(self.base_size, pygame.SRCALPHA).convert_alpha()
+        self.screen = self.canvas  # compatibility for existing scenes
         self.clock = pygame.time.Clock()
         self.running = True
         self.current_scene = None
@@ -37,3 +40,16 @@ class Game:
                 self.running = False
         pygame.quit()
         sys.exit()
+
+    def handle_resize(self, event):
+        new_size = (max(event.w, 640), max(event.h, 480))
+        self.display = pygame.display.set_mode(new_size, pygame.RESIZABLE)
+
+    def present(self):
+        window_size = self.display.get_size()
+        if window_size == self.base_size:
+            self.display.blit(self.canvas, (0, 0))
+        else:
+            scaled = pygame.transform.smoothscale(self.canvas, window_size)
+            self.display.blit(scaled, (0, 0))
+        pygame.display.flip()

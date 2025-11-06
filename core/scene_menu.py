@@ -80,6 +80,9 @@ class MenuScene:
         while True:
             for e in pygame.event.get():
                 if e.type == pygame.QUIT: return "EXIT"
+                if e.type == pygame.VIDEORESIZE:
+                    self.game.handle_resize(e)
+                    continue
                 if e.type == pygame.MOUSEBUTTONDOWN:
                     if self.buttons["lesson"].rect.collidepoint(e.pos):
                         return "LESSON"
@@ -147,4 +150,4 @@ class MenuScene:
             # Main buttons
             for b in self.buttons.values():
                 b.draw(self.screen, self.font, hovered=b.rect.collidepoint(pygame.mouse.get_pos()))
-            pygame.display.flip()
+            self.game.present()
