@@ -30,14 +30,15 @@ class MenuScene:
                 if e.type == pygame.VIDEORESIZE:
                     self.game.handle_resize(e)
                     continue
+                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None
                 if e.type == pygame.MOUSEBUTTONDOWN:
                     for i, btn in enumerate(self.dialect_btns):
-                        if btn.rect.collidepoint(e.pos):
+                        if pointer and btn.rect.collidepoint(pointer):
                             self.dialect = ["central", "northern", "isan", "southern"][i]
-                    if self.start_btn.rect.collidepoint(e.pos):
+                    if pointer and self.start_btn.rect.collidepoint(pointer):
                         self.game.dialect = self.dialect
                         return "LESSON"
-                    if self.free_btn.rect.collidepoint(e.pos):
+                    if pointer and self.free_btn.rect.collidepoint(pointer):
                         self.game.dialect = self.dialect
                         return "FREESPEAK"
 
@@ -49,15 +50,16 @@ class MenuScene:
             self.screen.blit(subtitle, (WIDTH//2-subtitle.get_width()//2, 180))
 
             # Dialect selector
+            mouse_pos = self.game.mouse_pos()
             for i, btn in enumerate(self.dialect_btns):
-                hovered = btn.rect.collidepoint(pygame.mouse.get_pos())
+                hovered = btn.rect.collidepoint(mouse_pos)
                 btn.draw(self.screen, self.btnfont, hovered=hovered)
                 if ["central", "northern", "isan", "southern"][i] == self.dialect:
                     pygame.draw.rect(self.screen, YELLOW, btn.rect, 4, border_radius=btn.radius)
 
             # Main buttons
-            self.start_btn.draw(self.screen, self.btnfont, hovered=self.start_btn.rect.collidepoint(pygame.mouse.get_pos()))
-            self.free_btn.draw(self.screen, self.btnfont, hovered=self.free_btn.rect.collidepoint(pygame.mouse.get_pos()))
+            self.start_btn.draw(self.screen, self.btnfont, hovered=self.start_btn.rect.collidepoint(mouse_pos))
+            self.free_btn.draw(self.screen, self.btnfont, hovered=self.free_btn.rect.collidepoint(mouse_pos))
 
             self.game.present()
             clock.tick(FPS)

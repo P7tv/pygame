@@ -31,9 +31,11 @@ class TextField:
         self.placeholder = placeholder
         self.focus = False
 
-    def handle(self, event):
+    def handle(self, event, pointer_pos=None):
         if event.type == pygame.MOUSEBUTTONDOWN:
-            self.focus = self.rect.collidepoint(event.pos)
+            pos = pointer_pos if pointer_pos is not None else getattr(event, "pos", None)
+            if pos is not None:
+                self.focus = self.rect.collidepoint(pos)
         elif self.focus and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]

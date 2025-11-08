@@ -39,12 +39,14 @@ class FreeSpeakScene:
                 if e.type == pygame.VIDEORESIZE:
                     self.game.handle_resize(e)
                     continue
-                for f in self.fields.values(): f.handle(e)
+                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None
+                for f in self.fields.values():
+                    f.handle(e, pointer_pos=pointer)
                 if e.type == pygame.MOUSEBUTTONDOWN:
-                    if self.send_button.rect.collidepoint(e.pos):
+                    if pointer and self.send_button.rect.collidepoint(pointer):
                         self._trigger_ai()
                     for key, rect in self.dialect_rects:
-                        if rect.collidepoint(e.pos):
+                        if pointer and rect.collidepoint(pointer):
                             self.dialect = key
                             self.game.state["dialect"] = key
                 if e.type == pygame.KEYDOWN:
@@ -93,7 +95,8 @@ class FreeSpeakScene:
 
             for f in self.fields.values():
                 f.draw(self.screen)
-            self.send_button.draw(self.screen, self.font, hovered=self.send_button.rect.collidepoint(pygame.mouse.get_pos()))
+            mouse_pos = self.game.mouse_pos()
+            self.send_button.draw(self.screen, self.font, hovered=self.send_button.rect.collidepoint(mouse_pos))
 
             status_y = 360
             convo_rect = pygame.Rect(120, status_y, 560, 180)

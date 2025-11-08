@@ -25,6 +25,22 @@ class Game:
         self.category = self.state["category"]
         self.switch_scene("MENU")
 
+    def _scale_factor(self):
+        win_w, win_h = self.display.get_size()
+        base_w, base_h = self.base_size
+        scale_x = base_w / win_w if win_w else 1
+        scale_y = base_h / win_h if win_h else 1
+        return scale_x, scale_y
+
+    def logical_pos(self, pos):
+        """Convert window coordinates to the base canvas coordinates."""
+        sx, sy = self._scale_factor()
+        return (int(pos[0] * sx), int(pos[1] * sy))
+
+    def mouse_pos(self):
+        """Return current mouse position mapped to canvas coordinates."""
+        return self.logical_pos(pygame.mouse.get_pos())
+
     def switch_scene(self, name):
         scene_class = self.scene_map.get(name)
         if scene_class:

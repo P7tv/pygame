@@ -83,18 +83,19 @@ class MenuScene:
                 if e.type == pygame.VIDEORESIZE:
                     self.game.handle_resize(e)
                     continue
+                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None
                 if e.type == pygame.MOUSEBUTTONDOWN:
-                    if self.buttons["lesson"].rect.collidepoint(e.pos):
+                    if pointer and self.buttons["lesson"].rect.collidepoint(pointer):
                         return "LESSON"
-                    if self.buttons["free"].rect.collidepoint(e.pos):
+                    if pointer and self.buttons["free"].rect.collidepoint(pointer):
                         return "FREE"
                     for key, rect in self.dialect_rects:
-                        if rect.collidepoint(e.pos):
+                        if pointer and rect.collidepoint(pointer):
                             self.selected_dialect = key
                             self.game.state["dialect"] = key
                             self.game.dialect = key
                     for cat, rect in self.category_rects:
-                        if rect.collidepoint(e.pos):
+                        if pointer and rect.collidepoint(pointer):
                             self.selected_category = cat["key"]
                             self.game.state["category"] = self.selected_category
                             self.game.category = self.selected_category
@@ -148,6 +149,7 @@ class MenuScene:
                 self.screen.blit(label, label.get_rect(center=rect.center))
 
             # Main buttons
+            mouse_pos = self.game.mouse_pos()
             for b in self.buttons.values():
-                b.draw(self.screen, self.font, hovered=b.rect.collidepoint(pygame.mouse.get_pos()))
+                b.draw(self.screen, self.font, hovered=b.rect.collidepoint(mouse_pos))
             self.game.present()
