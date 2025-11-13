@@ -70,35 +70,18 @@ class LessonScene:
         self.screen = game.screen
         self.font = pygame.font.Font(FONT_PATH, 32)
         self.smallfont = pygame.font.Font(FONT_PATH, 22)
+        self.mode = self.game.state.get("mode", "standard")
+        self.challenge_level = self.game.state.get("challenge_level", DEFAULT_CHALLENGE_LEVEL)
         self.category_key = self.game.state.get("category", DEFAULT_CATEGORY_KEY)
-        self.category_label = next(
-            (c["label"] for c in CONTENT_CATEGORIES if c["key"] == self.category_key),
-            self.category_key,
-        )
-        self.category_file = category_path(self.category_key)
+        self.category_label = self._category_label_for_key(self.category_key)
+        self.category_file: str | None = None
         self.generation_error: str | None = None
-
         self.cards = []
         self.lesson_source = ""
-        try:
-            if not os.path.exists(self.category_file):
-                generated = generate_lessons(self.category_key, LESSON_COUNT)
-                save_lessons(self.category_file, generated)
-                self.cards = list(generated)
-                self.lesson_source = self.category_file
-        except Exception as exc:
-            self.generation_error = str(exc)
-
-        if not self.cards:
-            try:
-                self.cards, self.lesson_source = load_lessons(
-                    category_key=self.category_key,
-                    preferred=self.category_file,
-                )
-            except FileNotFoundError as exc:
-                raise RuntimeError(
-                    "ไม่พบข้อมูลบทเรียนและไม่สามารถสร้างบทเรียนใหม่ได้"
-                ) from exc
+        if self.mode == "challenge":
+            self._prepare_challenge_cards()
+        else:
+            self._prepare_standard_cards()
         self.cards = list(self.cards)
         random.shuffle(self.cards)
         self.index = 0
@@ -119,6 +102,60 @@ class LessonScene:
         self.last_action_msg = ""
         self.last_action_time = 0
         self.anim_phase = 0
+
+    def _category_label_for_key(self, key):
+        return next((c["label"] for c in CONTENT_CATEGORIES if c["key"] == key), key)
+
+    def _prepare_standard_cards(self):
+        self.category_file = category_path(self.category_key)
+        try:
+            if not os.path.exists(self.category_file):
+                generated = generate_lessons(self.category_key, LESSON_COUNT)
+                save_lessons(self.category_file, generated)
+                self.cards = list(generated)
+                self.lesson_source = self.category_file
+        except Exception as exc:
+            self.generation_error = str(exc)
+
+        if not self.cards:
+            try:
+                self.cards, self.lesson_source = load_lessons(
+                    category_key=self.category_key,
+                    preferred=self.category_file,
+                )
+            except FileNotFoundError as exc:
+                raise RuntimeError(
+                    "ไม่พบข้อมูลบทเรียนและไม่สามารถสร้างบทเรียนใหม่ได้"
+                ) from exc
+
+    def _prepare_challenge_cards(self):
+        level_cfg = CHALLENGE_LEVELS.get(
+            self.challenge_level, CHALLENGE_LEVELS[DEFAULT_CHALLENGE_LEVEL]
+        )
+        mix = self.game.state.get("challenge_mix")
+        if not mix:
+            available = [c["key"] for c in CONTENT_CATEGORIES]
+            random.shuffle(available)
+            mix = available[: level_cfg["category_mix"]]
+            self.game.state["challenge_mix"] = mix
+        cards = []
+        for key in mix:
+            preferred = category_path(key)
+            try:
+                lessons, _ = load_lessons(category_key=key, preferred=preferred)
+            except FileNotFoundError:
+                continue
+            random.shuffle(lessons)
+            cards.extend(lessons)
+        if not cards:
+            raise RuntimeError("ไม่พบบทเรียนสำหรับโหมดชาเลนจ์")
+        random.shuffle(cards)
+        rounds = level_cfg["rounds"]
+        self.cards = cards[:rounds]
+        picked_labels = [self._category_label_for_key(k) for k in mix]
+        mix_label = " / ".join(picked_labels)
+        self.category_label = f"ชาเลนจ์ {level_cfg['label']} • {mix_label}"
+        self.lesson_source = "challenge_mix"
 
     def evaluate(self, text, targets):
         best = max(fuzz.partial_ratio(text, t) for t in targets)
@@ -174,6 +211,9 @@ class LessonScene:
                                 self.game.state["xp"] = self.xp
                                 self.game.streak = self.streak
                                 self.game.xp = self.xp
+                                if self.mode == "challenge":
+                                    for key in ("mode", "challenge_level", "challenge_mix"):
+                                        self.game.state.pop(key, None)
                                 return "SUMMARY"
 
             self.screen.fill(WHITE)

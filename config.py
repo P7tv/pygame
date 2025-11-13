@@ -43,3 +43,26 @@ CONTENT_CATEGORIES = [
     {"key": "particles", "label": "คำอุทานและคำลงท้าย"},
 ]
 DEFAULT_CATEGORY_KEY = CONTENT_CATEGORIES[0]["key"]
+
+# Challenge mode
+CHALLENGE_LEVELS = {
+    "easy": {
+        "label": "ง่าย",
+        "rounds": 4,
+        "category_mix": 2,
+        "description": "โจทย์สั้น ปน 2 หมวดหมู่",
+    },
+    "medium": {
+        "label": "กลาง",
+        "rounds": 6,
+        "category_mix": 3,
+        "description": "เพิ่มความยากและหมวดหมู่หลากหลาย",
+    },
+    "hard": {
+        "label": "ยาก",
+        "rounds": 8,
+        "category_mix": 4,
+        "description": "โจทย์ยาว + ผสมหมวดแทบทั้งหมด",
+    },
+}
+DEFAULT_CHALLENGE_LEVEL = "easy"
