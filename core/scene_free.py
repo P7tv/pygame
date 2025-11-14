@@ -1,161 +1,229 @@
 import pygame, time, textwrap
-from core.ui import TextField, Button
+from core.ui import TextField, Button, Card, PRIMARY, SECONDARY, ACCENT, LIGHT_TEXT, DARK_BG, WHITE, BLACK
 from core.audio import Recorder, PathummaASR
 from rapidfuzz import fuzz
 from config import *
 from ai.dialect_advisor import roleplay_response
 
+
 class FreeSpeakScene:
     def __init__(self, game):
         self.game = game
         self.screen = game.screen
-        self.font = pygame.font.Font(FONT_PATH, 28)
-        self.smallfont = pygame.font.Font(FONT_PATH, 20)
+
+        # Fonts
+        self.title_font = pygame.font.Font(FONT_PATH, 64)
+        self.header_font = pygame.font.Font(FONT_PATH, 48)
+        self.label_font = pygame.font.Font(FONT_PATH, 28)
+        self.font = pygame.font.Font(FONT_PATH, 26)
+        self.small_font = pygame.font.Font(FONT_PATH, 20)
+
         self.asr = PathummaASR()
+        # start loading in background
+        self.asr.start_loading()
         self.rec = Recorder(SAMPLE_RATE, CHANNELS, MAX_SPEAK_SECONDS)
-        self.fields = {
-            "prompt": TextField(pygame.Rect(120, 150, 560, 50), self.font, "พิมพ์สิ่งที่อยากพูดหรือหัวข้อซ้อม..."),
-            "expect": TextField(pygame.Rect(120, 220, 560, 50), self.font, "ตัวอย่างคำตอบที่ถือว่าถูกต้อง (คั่นด้วย ,)"),
-        }
-        self.send_button = Button(pygame.Rect(120, 290, 240, 50), "คุยกับคนท้องถิ่น 🤝", ORANGE, WHITE)
+        self.waiting_transcription_job = None
+        self.processing_audio = False
+
+        # Dialect selector buttons
+        self.dialect_buttons = []
+        btn_width = 140
+        btn_height = 50
+        btn_gap = 16
+        total_w = btn_width * 4 + btn_gap * 3
+        start_x = (WIDTH - total_w) // 2
+
+        colors = [PRIMARY, ACCENT, SECONDARY, (200, 50, 100)]
+        for i, (d, color) in enumerate(zip(DIALECTS, colors)):
+            btn = Button(
+                pygame.Rect(start_x + i * (btn_width + btn_gap), 160, btn_width, btn_height),
+                DIALECT_LABELS[d],
+                color, WHITE, radius=10
+            )
+            self.dialect_buttons.append((d, btn))
+
+        # Input field for prompt
+        self.prompt_field = TextField(
+            pygame.Rect(200, 280, WIDTH - 400, 60),
+            self.font,
+            "พูดหัวข้อการสนทนา เช่น 'สวัสดี' หรือ 'คุณชื่ออะไร'..."
+        )
+
+        self.send_button = Button(
+            pygame.Rect(WIDTH // 2 - 150, 380, 300, 70),
+            "เริ่มสนทนา 🎤",
+            PRIMARY,
+            WHITE,
+            radius=35
+        )
+
         self.feedback = None
         self.recording = False
         self.dialect = self.game.state.get("dialect", DIALECTS[0])
         self.game.state["dialect"] = self.dialect
-        self.dialect_rects = []
-        for idx, key in enumerate(DIALECTS):
-            rect = pygame.Rect(120 + idx * 150, 90, 140, 44)
-            self.dialect_rects.append((key, rect))
+
         self.conversation = []
         self.ai_thinking = False
-        self.ai_error: str | None = None
-        self.max_messages = 6
+        self.ai_error = None
 
     def run(self):
-        clock = pygame.time.Clock()
         while True:
             for e in pygame.event.get():
-                if e.type == pygame.QUIT: return "EXIT"
+                if e.type == pygame.QUIT:
+                    return "EXIT"
                 if e.type == pygame.VIDEORESIZE:
                     self.game.handle_resize(e)
-                    continue
-                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None
-                for f in self.fields.values():
-                    f.handle(e, pointer_pos=pointer)
-                if e.type == pygame.MOUSEBUTTONDOWN:
-                    if pointer and self.send_button.rect.collidepoint(pointer):
-                        self._trigger_ai()
-                    for key, rect in self.dialect_rects:
-                        if pointer and rect.collidepoint(pointer):
-                            self.dialect = key
-                            self.game.state["dialect"] = key
                 if e.type == pygame.KEYDOWN:
-                    if e.key == pygame.K_ESCAPE: return "MENU"
+                    if e.key == pygame.K_ESCAPE:
+                        return "MENU"
                     if e.key == pygame.K_m:
-                        if not self.recording:
-                            self.rec.start(); self.recording = True
-                        else:
-                            wav = self.rec.stop_to_wav()
-                            self.recording = False
-                            text = self.asr.transcribe(wav)
-                            targets = [
-                                t.strip()
-                                for t in self.fields["expect"].text.split(",")
-                                if t.strip()
-                            ]
-                            if targets:
-                                best = max(fuzz.partial_ratio(text, t) for t in targets)
-                            else:
-                                best = 0
-                            self.feedback = (text, best)
-                    if e.key == pygame.K_RETURN and self.fields["prompt"].focus:
-                        self._trigger_ai()
-                    if pygame.K_F1 <= e.key <= pygame.K_F4:
-                        idx = e.key - pygame.K_F1
-                        if 0 <= idx < len(DIALECTS):
-                            self.dialect = DIALECTS[idx]
-                            self.game.state["dialect"] = self.dialect
+                        if self.asr.get_status() == "loaded":
+                            self._toggle_recording()
+                    if e.key == pygame.K_RETURN and self.prompt_field.focus:
+                        self._send_message()
+
+                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None
+                if e.type == pygame.MOUSEBUTTONDOWN and pointer:
+                    # Dialect buttons
+                    for d, btn in self.dialect_buttons:
+                        if btn.collide(pointer):
+                            self.dialect = d
+                            self.game.state["dialect"] = d
+
+                    if self.send_button.collide(pointer):
+                        self._send_message()
+
+                self.prompt_field.handle(e, pointer_pos=pointer)
+
+            # Poll for background transcription
+            if self.waiting_transcription_job is not None:
+                status, txt = self.asr.get_result(self.waiting_transcription_job)
+                if status != "pending":
+                    self.waiting_transcription_job = None
+                    if status == "ok":
+                        self.prompt_field.text = txt
+                    else:
+                        # show error message
+                        self.ai_error = f"ASR error: {txt}"
 
             self.screen.fill(WHITE)
-
-            title = self.font.render("โหมดพูดอิสระ", True, BLACK)
-            self.screen.blit(title, (120, 40))
-            subtitle = self.smallfont.render("กด M เพื่ออัดเสียง · Enter เพื่อคุยกับคนท้องถิ่น", True, (90, 90, 90))
-            self.screen.blit(subtitle, (120, 70))
-
-            # Dialect chips
-            for key, rect in self.dialect_rects:
-                selected = key == self.dialect
-                color = GREEN if selected else WHITE
-                border_color = GREEN
-                pygame.draw.rect(self.screen, color, rect, border_radius=20)
-                pygame.draw.rect(self.screen, border_color, rect, width=2, border_radius=20)
-                label = self.smallfont.render(DIALECT_LABELS.get(key, key), True, WHITE if selected else GREEN)
-                self.screen.blit(label, label.get_rect(center=rect.center))
-
-            for f in self.fields.values():
-                f.draw(self.screen)
-            mouse_pos = self.game.mouse_pos()
-            self.send_button.draw(self.screen, self.font, hovered=self.send_button.rect.collidepoint(mouse_pos))
-
-            status_y = 360
-            convo_rect = pygame.Rect(120, status_y, 560, 180)
-            pygame.draw.rect(self.screen, GRAY, convo_rect, border_radius=18)
-            pygame.draw.rect(self.screen, BLUE, convo_rect, width=2, border_radius=18)
-
-            msg_y = convo_rect.y + 16
-            for speaker, message in self.conversation[-self.max_messages:]:
-                wrapped = textwrap.wrap(message, width=40) or [message]
-                speaker_prefix = f"{speaker}: "
-                first_line = wrapped[0]
-                lines = [speaker_prefix + first_line] + ["   " + line for line in wrapped[1:]]
-                for line in lines:
-                    txt = self.smallfont.render(line, True, BLACK)
-                    self.screen.blit(txt, (convo_rect.x + 16, msg_y))
-                    msg_y += txt.get_height() + 4
-                    if msg_y > convo_rect.bottom - 20:
-                        break
-                if msg_y > convo_rect.bottom - 20:
-                    break
-
-            if self.ai_thinking:
-                thinking = self.smallfont.render("🤖 คนท้องถิ่นกำลังคิดคำตอบ...", True, BLUE)
-                self.screen.blit(thinking, (self.send_button.rect.right + 20, self.send_button.rect.y + 10))
-            elif self.ai_error:
-                err_txt = self.smallfont.render(f"⚠️ {self.ai_error}", True, RED)
-                self.screen.blit(err_txt, (self.send_button.rect.right + 20, self.send_button.rect.y + 10))
-
-            if self.recording:
-                recording_txt = self.smallfont.render("● กำลังบันทึกเสียง...", True, RED)
-                self.screen.blit(recording_txt, (120, convo_rect.bottom + 20))
-            elif self.feedback:
-                spoken, score = self.feedback
-                fb_text = self.smallfont.render(f"คุณพูดว่า: {spoken}  (คะแนน {score:.1f})", True, GREEN)
-                self.screen.blit(fb_text, (120, convo_rect.bottom + 20))
-
+            self._draw_ui()
             self.game.present()
-            clock.tick(FPS)
 
-    def _trigger_ai(self):
-        message = self.fields["prompt"].text.strip()
-        if not message:
-            self.ai_error = "พิมพ์ข้อความก่อนโต้ตอบ"
+    def _toggle_recording(self):
+        if not self.recording:
+            self.rec.start()
+            self.recording = True
+        else:
+            # stop and hand off WAV save + transcription request to background thread
+            self.recording = False
+            self.processing_audio = True
+
+            def _stop_and_request():
+                try:
+                    wav = self.rec.stop_to_wav()
+                    job = self.asr.request_transcribe(wav)
+                    self.waiting_transcription_job = job
+                except Exception as exc:
+                    print(f"[FreeSpeak] background stop/request failed: {exc}")
+                finally:
+                    try:
+                        self.processing_audio = False
+                    except Exception:
+                        pass
+
+            import threading as _thr
+            t = _thr.Thread(target=_stop_and_request, daemon=True)
+            t.start()
+
+    def _send_message(self):
+        msg = self.prompt_field.text.strip()
+        if not msg:
+            self.ai_error = "พิมพ์ข้อความก่อน"
             return
+
         self.ai_error = None
-        history = self.conversation[-self.max_messages :]
-        self.conversation.append(("คุณ", message))
-        self.fields["prompt"].text = ""
+        self.conversation.append(("คุณ", msg))
+        self.prompt_field.text = ""
         self.ai_thinking = True
         self.game.present()
         pygame.event.pump()
+
         try:
-            reply = roleplay_response(message, self.dialect, history)
+            reply = roleplay_response(msg, self.dialect, self.conversation[-6:])
+            speaker = f"ชาว{DIALECT_LABELS.get(self.dialect, self.dialect)}"
+            self.conversation.append((speaker, reply))
+            self.conversation = self.conversation[-12:]
         except Exception as exc:
             self.ai_error = str(exc)
-        else:
-            speaker_name = f"ชาว{DIALECT_LABELS.get(self.dialect, self.dialect)}"
-            self.conversation.append((speaker_name, reply))
         finally:
             self.ai_thinking = False
-            if len(self.conversation) > self.max_messages:
-                self.conversation = self.conversation[-self.max_messages :]
+
+    def _draw_ui(self):
+        """Draw free speech scene with Duolingo style"""
+        # Header
+        pygame.draw.rect(self.screen, DARK_BG, (0, 0, WIDTH, 120))
+        pygame.draw.line(self.screen, (220, 220, 220), (0, 119), (WIDTH, 119), 1)
+
+        title = self.title_font.render("🎤 พูดอิสระ", True, (40, 40, 40))
+        self.screen.blit(title, (50, 25))
+
+        # Dialect selector label
+        dialect_label = self.label_font.render("เลือกสำเนียง", True, LIGHT_TEXT)
+        self.screen.blit(dialect_label, (50, 150))
+
+        # Dialect buttons
+        mouse_pos = self.game.mouse_pos()
+        for d, btn in self.dialect_buttons:
+            btn.draw(self.screen, self.label_font, hovered=btn.collide(mouse_pos))
+
+        # Input prompt
+        prompt_label = self.label_font.render("หัวข้อการสนทนา", True, LIGHT_TEXT)
+        self.screen.blit(prompt_label, (200, 250))
+        self.prompt_field.draw(self.screen)
+
+        # Send button
+        self.send_button.draw(self.screen, self.label_font, hovered=self.send_button.collide(mouse_pos))
+
+        # Conversation box
+        conv_rect = pygame.Rect(200, 500, WIDTH - 400, 550)
+        pygame.draw.rect(self.screen, (240, 245, 250), conv_rect, border_radius=20)
+        pygame.draw.rect(self.screen, (220, 220, 220), conv_rect, 2, border_radius=20)
+
+        # Conversation content
+        msg_y = conv_rect.y + 20
+        for speaker, message in self.conversation[-10:]:
+            wrapped = textwrap.wrap(message, width=60)
+            prefix = f"👤 {speaker}: " if speaker == "คุณ" else f"🗣️ {speaker}: "
+
+            for i, line in enumerate(wrapped):
+                txt_line = (prefix + line) if i == 0 else ("  " + line)
+                txt_color = PRIMARY if speaker == "คุณ" else SECONDARY
+                txt = self.small_font.render(txt_line, True, txt_color)
+                self.screen.blit(txt, (conv_rect.x + 20, msg_y))
+                msg_y += txt.get_height() + 6
+
+                if msg_y > conv_rect.bottom - 40:
+                    break
+
+            msg_y += 5
+            if msg_y > conv_rect.bottom - 40:
+                break
+
+        # Status indicators
+        status_y = HEIGHT - 100
+        if self.ai_thinking:
+            thinking = self.font.render("🤖 AI กำลังตัวสนทนา...", True, SECONDARY)
+            self.screen.blit(thinking, (200, status_y))
+        elif self.ai_error:
+            err = self.font.render(f"⚠️ {self.ai_error}", True, (200, 50, 50))
+            self.screen.blit(err, (200, status_y))
+        elif self.recording:
+            rec = self.font.render("● บันทึกเสียง...", True, (255, 100, 100))
+            self.screen.blit(rec, (200, status_y))
+        elif getattr(self, 'processing_audio', False):
+            proc = self.font.render("กำลังประมวลผลเสียง...", True, (40, 40, 40))
+            self.screen.blit(proc, (200, status_y))
+        else:
+            hint = self.small_font.render("กด M เพื่อบันทึกเสียง | Esc เพื่อกลับเมนู", True, LIGHT_TEXT)
+            self.screen.blit(hint, (200, status_y))

@@ -1,6 +1,10 @@
-WIDTH, HEIGHT = 1900, 1080
+WIDTH, HEIGHT = 2560, 1440
 FPS = 60
-FONT_PATH = "assets/fonts/ThaiSansNeue-Black.ttf"
+FONT_PATH = "assets/fonts/ThaiSansNeue-Bold.ttf"
+
+# Asset paths
+SOUND_OK = "assets/ok.wav"
+SOUND_BAD = "assets/bad.wav"
 
 # Colors
 WHITE = (255, 255, 255)

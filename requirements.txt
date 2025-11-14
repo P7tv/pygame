@@ -1,8 +1,8 @@
 # Core
 pygame>=2.5.2
 sounddevice>=0.4.6
-numpy>=2.3.0
-scipy>=1.16.0
+numpy>=1.26.4,<2.1
+scipy>=1.11.4,<1.13
 pydub>=0.25.1
 speechrecognition>=3.10.0
 rapidfuzz>=3.10.0

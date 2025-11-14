@@ -2,8 +2,14 @@ import pygame
 from dataclasses import dataclass
 from config import *
 
-ORANGE = (251, 191, 36)
-PINK = (255, 99, 132)
+# === Color Palette (Duolingo-inspired) ===
+PRIMARY = (58, 150, 94)      # Green
+SECONDARY = (255, 165, 0)    # Orange
+ACCENT = (50, 120, 255)      # Blue
+DARK_BG = (248, 249, 250)
+LIGHT_TEXT = (51, 51, 51)
+BORDER_COLOR = (220, 220, 220)
+
 
 @dataclass
 class Button:
@@ -11,17 +17,24 @@ class Button:
     label: str
     bg: tuple
     fg: tuple
-    radius: int = 20
+    radius: int = 12
     shadow: bool = True
+    border_width: int = 0
 
     def draw(self, surf, font, hovered=False):
-        color = tuple(min(255, int(c * (1.1 if hovered else 1))) for c in self.bg)
-        if self.shadow:
-            shadow_rect = self.rect.move(3, 3)
-            pygame.draw.rect(surf, (200, 200, 200), shadow_rect, border_radius=self.radius)
+        color = tuple(min(255, int(c * (1.12 if hovered else 1))) for c in self.bg)
+        if self.shadow and not hovered:
+            shadow_rect = self.rect.move(0, 3)
+            pygame.draw.rect(surf, (200, 200, 200, 100), shadow_rect, border_radius=self.radius)
         pygame.draw.rect(surf, color, self.rect, border_radius=self.radius)
+        if self.border_width > 0:
+            pygame.draw.rect(surf, BORDER_COLOR, self.rect, self.border_width, border_radius=self.radius)
         txt = font.render(self.label, True, self.fg)
         surf.blit(txt, txt.get_rect(center=self.rect.center))
+
+    def collide(self, pos):
+        return self.rect.collidepoint(pos)
+
 
 class TextField:
     def __init__(self, rect, font, placeholder=""):
@@ -34,8 +47,7 @@ class TextField:
     def handle(self, event, pointer_pos=None):
         if event.type == pygame.MOUSEBUTTONDOWN:
             pos = pointer_pos if pointer_pos is not None else getattr(event, "pos", None)
-            if pos is not None:
-                self.focus = self.rect.collidepoint(pos)
+            self.focus = self.rect.collidepoint(pos) if pos else False
         elif self.focus and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
@@ -46,32 +58,13 @@ class TextField:
         return None
 
     def draw(self, surf):
-        pygame.draw.rect(surf, WHITE if self.focus else GRAY, self.rect, border_radius=12)
+        color = WHITE if self.focus else DARK_BG
+        pygame.draw.rect(surf, color, self.rect, border_radius=12)
+        pygame.draw.rect(surf, ACCENT if self.focus else BORDER_COLOR, self.rect, 2, border_radius=12)
         text = self.text or self.placeholder
-        color = BLACK if self.text else (160, 174, 192)
-        surf.blit(self.font.render(text, True, color), (self.rect.x+10, self.rect.y+10))
+        text_color = BLACK if self.text else (160, 160, 160)
+        surf.blit(self.font.render(text, True, text_color), (self.rect.x + 16, self.rect.y + 12))
 
-def draw_status(surf, font, feedback=None, score=None, progress=None):
-    """Draws status bar at the top of the screen."""
-    status_text = ""
-    if feedback:
-        kind, val, text = feedback
-        if kind == "ok":
-            status_text += "✅ ถูกต้อง "
-        elif kind == "partial":
-            status_text += "⚠️ ใกล้เคียง "
-        else:
-            status_text += "❌ ลองใหม่ "
-        status_text += f"({val}) | \"{text}\""
-    if score is not None:
-        status_text += f"   คะแนน: {score}"
-    if progress is not None:
-        status_text += f"   ข้อที่ {progress[0]}/{progress[1]}"
-    if status_text:
-        bar_rect = pygame.Rect(0, 0, WIDTH, 50)
-        pygame.draw.rect(surf, GRAY, bar_rect)
-        txt = font.render(status_text, True, BLACK)
-        surf.blit(txt, (20, 10))
 
 class Chip:
     def __init__(self, text, bg, fg):
@@ -81,9 +74,11 @@ class Chip:
 
     def draw(self, surf, font, x, y):
         txt = font.render(self.text, True, self.fg)
-        rect = pygame.Rect(x, y, txt.get_width()+32, txt.get_height()+16)
-        pygame.draw.rect(surf, self.bg, rect, border_radius=16)
-        surf.blit(txt, (rect.x+16, rect.y+8))
+        rect = pygame.Rect(x, y, txt.get_width() + 24, txt.get_height() + 14)
+        pygame.draw.rect(surf, self.bg, rect, border_radius=20)
+        surf.blit(txt, (rect.x + 12, rect.y + 7))
+        return rect
+
 
 class ProgressBar:
     def __init__(self, value, total):
@@ -91,13 +86,15 @@ class ProgressBar:
         self.total = total
 
     def draw(self, surf, x, y, w, h):
-        pygame.draw.rect(surf, GRAY, (x, y, w, h), border_radius=h//2)
+        pygame.draw.rect(surf, BORDER_COLOR, (x, y, w, h), border_radius=h // 2)
         if self.total > 0:
             fill = int(w * self.value / self.total)
-            pygame.draw.rect(surf, BLUE, (x, y, fill, h), border_radius=h//2)
-        pygame.draw.rect(surf, BLACK, (x, y, w, h), 2, border_radius=h//2)
+            pygame.draw.rect(surf, PRIMARY, (x, y, fill, h), border_radius=h // 2)
+
 
 class HeaderUI:
+    """Top navigation bar with stats"""
+
     def __init__(self, xp, streak, hearts, dialect, progress, total):
         self.xp = xp
         self.streak = streak
@@ -115,34 +112,61 @@ class HeaderUI:
         self.total = total
 
     def draw(self, surf):
-        font = pygame.font.Font(FONT_PATH, 22)
-        # XP
-        pygame.draw.circle(surf, YELLOW, (40, 36), 18)
-        xp_txt = font.render(str(self.xp), True, BLACK)
-        surf.blit(xp_txt, (28, 26))
-        # Streak
-        if self.streak > 0:
-            fire = font.render("🔥", True, (255, 120, 0))
-            surf.blit(fire, (80, 20))
-            streak_txt = font.render(str(self.streak), True, BLACK)
-            surf.blit(streak_txt, (110, 26))
-        # Hearts
+        # Background
+        pygame.draw.rect(surf, WHITE, (0, 0, WIDTH, 80))
+        pygame.draw.line(surf, BORDER_COLOR, (0, 79), (WIDTH, 79), 1)
+
+        font = pygame.font.Font(FONT_PATH, 24)
+        small_font = pygame.font.Font(FONT_PATH, 18)
+
+        # Left: XP Badge
+        xp_badge = pygame.Rect(20, 15, 60, 50)
+        pygame.draw.rect(surf, SECONDARY, xp_badge, border_radius=10)
+        xp_txt = small_font.render(str(self.xp), True, WHITE)
+        surf.blit(xp_txt, (xp_badge.x + 15, xp_badge.y + 8))
+        xp_label = pygame.font.Font(FONT_PATH, 12).render("XP", True, WHITE)
+        surf.blit(xp_label, (xp_badge.x + 18, xp_badge.y + 28))
+
+        # Center: Progress
+        progress_rect = pygame.Rect(WIDTH // 2 - 150, 30, 300, 20)
+        ProgressBar(self.progress, self.total).draw(surf, progress_rect.x, progress_rect.y, progress_rect.w, progress_rect.h)
+        progress_txt = small_font.render(f"{self.progress}/{self.total}", True, LIGHT_TEXT)
+        surf.blit(progress_txt, (progress_rect.x + progress_rect.w + 15, progress_rect.y - 2))
+
+        # Right: Hearts & Streak
+        heart_x = WIDTH - 200
         for i in range(3):
-            color = RED if i < self.hearts else GRAY
-            heart = font.render("❤️", True, color)
-            surf.blit(heart, (160+i*32, 22))
-        # Dialect tag
-        tag_map = {
-            "central": (GREEN, "ภาคกลาง"),
-            "northern": (BLUE, "เหนือ"),
-            "isan": (ORANGE, "อีสาน"),
-            "southern": (PINK, "ใต้")
-        }
-        tag_color, tag_label = tag_map.get(self.dialect, (GRAY, ""))
-        tag_rect = pygame.Rect(270, 22, 80, 28)
-        pygame.draw.rect(surf, tag_color, tag_rect, border_radius=14)
-        tag_txt = font.render(tag_label, True, WHITE)
-        surf.blit(tag_txt, (278, 26))
-        surf.blit(tag_txt, (tag_rect.x+12, tag_rect.y+4))
-        # Progress bar
-        ProgressBar(self.progress, self.total).draw(surf, 370, 28, 220, 16)
+            heart_color = RED if i < self.hearts else BORDER_COLOR
+            heart = font.render("❤️", True, heart_color)
+            surf.blit(heart, (heart_x + i * 40, 20))
+
+        if self.streak > 0:
+            fire = font.render("🔥", True, SECONDARY)
+            surf.blit(fire, (WIDTH - 80, 20))
+            streak_txt = small_font.render(str(self.streak), True, LIGHT_TEXT)
+            surf.blit(streak_txt, (WIDTH - 50, 25))
+
+
+class Card:
+    """Duolingo-style card component"""
+
+    def __init__(self, text, x, y, width, height):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.hovered = False
+
+    def draw(self, surf, font, selected=False):
+        bg = PRIMARY if selected else WHITE
+        text_color = WHITE if selected else LIGHT_TEXT
+        pygame.draw.rect(surf, bg, self.rect, border_radius=16)
+        pygame.draw.rect(surf, PRIMARY if selected else BORDER_COLOR, self.rect, 2 if selected else 1, border_radius=16)
+        txt = font.render(self.text, True, text_color)
+        surf.blit(txt, txt.get_rect(center=self.rect.center))
+
+    def collide(self, pos):
+        return self.rect.collidepoint(pos)
+
+
+def draw_status(surface, font, text, pos, color=LIGHT_TEXT):
+    label = font.render(text, True, color)
+    surface.blit(label, pos)
