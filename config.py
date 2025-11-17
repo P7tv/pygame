@@ -1,0 +1,72 @@
+WIDTH, HEIGHT = 2560, 1440
+FPS = 60
+FONT_PATH = "assets/fonts/ThaiSansNeue-Bold.ttf"
+
+# เส้นทางของไฟล์เสียงที่ใช้แจ้งเตือนในเกม
+SOUND_OK = "assets/ok.wav"
+SOUND_BAD = "assets/bad.wav"
+
+# พาเลตต์สีที่ส่วนต่าง ๆ ของ UI เรียกใช้งาน
+WHITE = (255, 255, 255)
+GRAY = (245, 247, 250)
+GREEN = (88, 204, 2)
+BLUE = (28, 176, 246)
+RED = (239, 68, 68)
+YELLOW = (251, 191, 36)
+BLACK = (0, 0, 0)
+ORANGE = (251, 191, 36)
+PINK = (255, 99, 132)
+
+# จำนวนการ์ดที่ต้องการให้ LLM สร้างในแต่ละหมวด
+LESSON_COUNT = 8
+
+# ค่าปรับจูนระบบรู้จำเสียง (Sampling และ Threshold ที่ใช้ใน RapidFuzz)
+SAMPLE_RATE = 16000
+CHANNELS = 1
+MAX_SPEAK_SECONDS = 5
+ASR_THRESHOLD_OK = 85
+ASR_THRESHOLD_PARTIAL = 65
+
+# รายการสำเนียงที่รองรับและชื่อแสดงผลภาษาไทย
+DIALECTS = ["central", "northern", "isan", "southern"]
+DIALECT_LABELS = {
+    "central": "ภาคกลาง",
+    "northern": "ภาคเหนือ",
+    "isan": "อีสาน",
+    "southern": "ภาคใต้"
+}
+
+# ข้อมูลหมวดบทเรียนที่ใช้ทั้งในเมนูและระบบสุ่มโจทย์
+CONTENT_CATEGORIES = [
+    {"key": "greetings", "label": "คำทักทายและมารยาทพื้นฐาน"},
+    {"key": "pronouns", "label": "สรรพนามส่วนตัว"},
+    {"key": "directions", "label": "คำบ่งชี้สถานที่และทิศทาง"},
+    {"key": "questions", "label": "คำถามพื้นฐาน (5W1H)"},
+    {"key": "feelings", "label": "คำแสดงความรู้สึก/ความเห็น"},
+    {"key": "daily", "label": "คำเรียกกลุ่มคำในชีวิตประจำวัน"},
+    {"key": "particles", "label": "คำอุทานและคำลงท้าย"},
+]
+DEFAULT_CATEGORY_KEY = CONTENT_CATEGORIES[0]["key"]
+
+# ค่ากำหนดโหมดชาเลนจ์ (จำนวนข้อและหมวดผสม)
+CHALLENGE_LEVELS = {
+    "easy": {
+        "label": "ง่าย",
+        "rounds": 4,
+        "category_mix": 2,
+        "description": "โจทย์สั้น ปน 2 หมวดหมู่",
+    },
+    "medium": {
+        "label": "กลาง",
+        "rounds": 6,
+        "category_mix": 3,
+        "description": "เพิ่มความยากและหมวดหมู่หลากหลาย",
+    },
+    "hard": {
+        "label": "ยาก",
+        "rounds": 8,
+        "category_mix": 4,
+        "description": "โจทย์ยาว + ผสมหมวดแทบทั้งหมด",
+    },
+}
+DEFAULT_CHALLENGE_LEVEL = "easy"
