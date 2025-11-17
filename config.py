@@ -2,11 +2,11 @@ WIDTH, HEIGHT = 2560, 1440
 FPS = 60
 FONT_PATH = "assets/fonts/ThaiSansNeue-Bold.ttf"
 
-# Asset paths
+# เส้นทางของไฟล์เสียงที่ใช้แจ้งเตือนในเกม
 SOUND_OK = "assets/ok.wav"
 SOUND_BAD = "assets/bad.wav"
 
-# Colors
+# พาเลตต์สีที่ส่วนต่าง ๆ ของ UI เรียกใช้งาน
 WHITE = (255, 255, 255)
 GRAY = (245, 247, 250)
 GREEN = (88, 204, 2)
@@ -17,17 +17,17 @@ BLACK = (0, 0, 0)
 ORANGE = (251, 191, 36)
 PINK = (255, 99, 132)
 
-# Gameplay
+# จำนวนการ์ดที่ต้องการให้ LLM สร้างในแต่ละหมวด
 LESSON_COUNT = 8
 
-# ASR Config
+# ค่าปรับจูนระบบรู้จำเสียง (Sampling และ Threshold ที่ใช้ใน RapidFuzz)
 SAMPLE_RATE = 16000
 CHANNELS = 1
 MAX_SPEAK_SECONDS = 5
 ASR_THRESHOLD_OK = 85
 ASR_THRESHOLD_PARTIAL = 65
 
-# Dialect labels
+# รายการสำเนียงที่รองรับและชื่อแสดงผลภาษาไทย
 DIALECTS = ["central", "northern", "isan", "southern"]
 DIALECT_LABELS = {
     "central": "ภาคกลาง",
@@ -36,7 +36,7 @@ DIALECT_LABELS = {
     "southern": "ภาคใต้"
 }
 
-# Lesson categories
+# ข้อมูลหมวดบทเรียนที่ใช้ทั้งในเมนูและระบบสุ่มโจทย์
 CONTENT_CATEGORIES = [
     {"key": "greetings", "label": "คำทักทายและมารยาทพื้นฐาน"},
     {"key": "pronouns", "label": "สรรพนามส่วนตัว"},
@@ -48,7 +48,7 @@ CONTENT_CATEGORIES = [
 ]
 DEFAULT_CATEGORY_KEY = CONTENT_CATEGORIES[0]["key"]
 
-# Challenge mode
+# ค่ากำหนดโหมดชาเลนจ์ (จำนวนข้อและหมวดผสม)
 CHALLENGE_LEVELS = {
     "easy": {
         "label": "ง่าย",

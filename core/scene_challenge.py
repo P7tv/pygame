@@ -6,11 +6,13 @@ from core.sound_manager import SoundManager
 
 
 class ChallengeScene:
+    """ฉากเลือกโหมดชาเลนจ์ กำหนดระดับความยากก่อนเริ่มบทเรียน"""
+
     def __init__(self, game):
         self.game = game
         self.screen = game.screen
 
-        # Fonts
+        # ฟอนต์ขนาดต่าง ๆ สำหรับหัวเรื่อง/รายละเอียดใต้การ์ด
         self.title_font = pygame.font.Font(FONT_PATH, 64)
         self.header_font = pygame.font.Font(FONT_PATH, 48)
         self.label_font = pygame.font.Font(FONT_PATH, 28)
@@ -20,10 +22,10 @@ class ChallengeScene:
         self._create_buttons()
 
     def _create_buttons(self):
-        """Create challenge level buttons"""
+        """เตรียมการ์ดตัวเลือก 3 ระดับวางชิดกันกลางจอ"""
         self.level_cards = []
 
-        # Card dimensions
+        # ขนาดการ์ดและระยะห่าง
         card_width = 280
         card_height = 200
         gap = 30
@@ -39,6 +41,7 @@ class ChallengeScene:
             self.level_cards.append((level, card, color))
 
     def run(self):
+        """วนรอเหตุการณ์ คลิกเลือกการ์ดแล้วสตาร์ทโหมดชาเลนจ์"""
         while True:
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
@@ -48,7 +51,7 @@ class ChallengeScene:
                 if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
                     return "MENU"
 
-                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None
+                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None  # พิกัดเมาส์แปลงสู่ canvas
                 if e.type == pygame.MOUSEBUTTONDOWN and pointer:
                     sound_mgr = SoundManager()
                     for level, card, _ in self.level_cards:
@@ -60,7 +63,7 @@ class ChallengeScene:
             self.game.present()
 
     def _start_challenge(self, level):
-        """Start challenge mode with given level"""
+        """บันทึกค่าความยากและสร้างรายการหมวดผสม ก่อนส่งผู้เล่นไป LessonScene"""
         cfg = CHALLENGE_LEVELS[level]
         self.game.state.update({
             "mode": "challenge",
@@ -70,28 +73,25 @@ class ChallengeScene:
         return "LESSON"
 
     def _draw(self):
-        """Draw challenge selection screen"""
-        # Background
+        """วาดฉากหน้าต่างพาเนลเลือกความยาก"""
         self.screen.fill(WHITE)
 
-        # Header
+        # ส่วนหัวเทาอ่อนด้านบนให้สอดคล้องกับฉากอื่น
         pygame.draw.rect(self.screen, DARK_BG, (0, 0, WIDTH, 150))
         pygame.draw.line(self.screen, (220, 220, 220), (0, 149), (WIDTH, 149), 1)
 
         title = self.title_font.render("⚡ โหมดชาเลนจ์", True, WHITE)
         self.screen.blit(title, (50, 35))
 
-        # Subtitle
         subtitle = self.header_font.render("เลือกระดับความยาก", True, LIGHT_TEXT)
         self.screen.blit(subtitle, (50, 200))
 
-        # Level cards
+        # วาดการ์ดแต่ละระดับพร้อมคำอธิบายสั้น ๆ
         mouse_pos = self.game.mouse_pos()
         for level, card, color in self.level_cards:
             cfg = CHALLENGE_LEVELS[level]
             card.draw(self.screen, self.label_font, selected=False)
 
-            # Card details
             card_rect = card.rect
             desc = self.desc_font.render(cfg["description"], True, LIGHT_TEXT)
             self.screen.blit(desc, (card_rect.x + 20, card_rect.y + 80))
@@ -99,7 +99,7 @@ class ChallengeScene:
             rounds = self.desc_font.render(f"{cfg['rounds']} ข้อ • {cfg['category_mix']} หมวด", True, LIGHT_TEXT)
             self.screen.blit(rounds, (card_rect.x + 20, card_rect.y + 130))
 
-        # Back button
+        # ปุ่ม Back อยู่ซ้ายล่าง ปล่อยให้ hover เปลี่ยนสีตาม component
         back_btn = Button(
             pygame.Rect(50, HEIGHT - 120, 200, 70),
             "← กลับ",
