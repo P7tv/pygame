@@ -1,0 +1,248 @@
+import pygame
+from dataclasses import dataclass
+from config import *
+
+# === Color Palette (Duolingo-inspired) ===
+PRIMARY = (58, 150, 94)      # Green
+SECONDARY = (255, 165, 0)    # Orange
+ACCENT = (50, 120, 255)      # Blue
+DARK_BG = (248, 249, 250)
+LIGHT_TEXT = (51, 51, 51)
+BORDER_COLOR = (220, 220, 220)
+
+
+@dataclass
+class Button:
+    rect: pygame.Rect
+    label: str
+    bg: tuple
+    fg: tuple
+    radius: int = 12
+    shadow: bool = True
+    border_width: int = 0
+
+    def draw(self, surf, font, hovered=False):
+        color = tuple(min(255, int(c * (1.12 if hovered else 1))) for c in self.bg)
+        if self.shadow and not hovered:
+            shadow_rect = self.rect.move(0, 3)
+            pygame.draw.rect(surf, (200, 200, 200, 100), shadow_rect, border_radius=self.radius)
+        pygame.draw.rect(surf, color, self.rect, border_radius=self.radius)
+        if self.border_width > 0:
+            pygame.draw.rect(surf, BORDER_COLOR, self.rect, self.border_width, border_radius=self.radius)
+        
+        # Render text with automatic font scaling if needed
+        txt = font.render(self.label, True, self.fg)
+        max_width = self.rect.width - 20
+        
+        # If text is wider than button, scale down the font
+        if txt.get_width() > max_width:
+            current_size = font.get_height()
+            while current_size > 12 and txt.get_width() > max_width:
+                current_size -= 2
+                scaled_font = pygame.font.Font(FONT_PATH, current_size)
+                txt = scaled_font.render(self.label, True, self.fg)
+        
+        txt_rect = txt.get_rect(center=self.rect.center)
+        surf.blit(txt, txt_rect)
+
+    def collide(self, pos):
+        return self.rect.collidepoint(pos)
+
+
+class TextField:
+    def __init__(self, rect, font, placeholder=""):
+        self.rect = rect
+        self.font = font
+        self.text = ""
+        self.placeholder = placeholder
+        self.focus = False
+
+    def handle(self, event, pointer_pos=None):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            pos = pointer_pos if pointer_pos is not None else getattr(event, "pos", None)
+            self.focus = self.rect.collidepoint(pos) if pos else False
+        elif self.focus and event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+            elif event.key == pygame.K_RETURN:
+                return "submit"
+            elif event.unicode:
+                self.text += event.unicode
+        return None
+
+    def draw(self, surf):
+        color = WHITE if self.focus else DARK_BG
+        pygame.draw.rect(surf, color, self.rect, border_radius=12)
+        pygame.draw.rect(surf, ACCENT if self.focus else BORDER_COLOR, self.rect, 2, border_radius=12)
+        text = self.text or self.placeholder
+        text_color = BLACK if self.text else (160, 160, 160)
+        surf.blit(self.font.render(text, True, text_color), (self.rect.x + 16, self.rect.y + 12))
+
+
+class Chip:
+    def __init__(self, text, bg, fg):
+        self.text = text
+        self.bg = bg
+        self.fg = fg
+
+    def draw(self, surf, font, x, y):
+        txt = font.render(self.text, True, self.fg)
+        rect = pygame.Rect(x, y, txt.get_width() + 24, txt.get_height() + 14)
+        pygame.draw.rect(surf, self.bg, rect, border_radius=20)
+        surf.blit(txt, (rect.x + 12, rect.y + 7))
+        return rect
+
+
+class ProgressBar:
+    def __init__(self, value, total):
+        self.value = value
+        self.total = total
+
+    def draw(self, surf, x, y, w, h):
+        pygame.draw.rect(surf, BORDER_COLOR, (x, y, w, h), border_radius=h // 2)
+        if self.total > 0:
+            fill = int(w * self.value / self.total)
+            pygame.draw.rect(surf, PRIMARY, (x, y, fill, h), border_radius=h // 2)
+
+
+class HeaderUI:
+    """Top navigation bar with stats"""
+
+    def __init__(self, xp, streak, hearts, dialect, progress, total):
+        self.xp = xp
+        self.streak = streak
+        self.hearts = hearts
+        self.dialect = dialect
+        self.progress = progress
+        self.total = total
+
+    def update(self, xp, streak, hearts, dialect, progress, total):
+        self.xp = xp
+        self.streak = streak
+        self.hearts = hearts
+        self.dialect = dialect
+        self.progress = progress
+        self.total = total
+
+    def draw(self, surf):
+        # Background
+        pygame.draw.rect(surf, WHITE, (0, 0, WIDTH, 80))
+        pygame.draw.line(surf, BORDER_COLOR, (0, 79), (WIDTH, 79), 1)
+
+        font = pygame.font.Font(FONT_PATH, 24)
+        small_font = pygame.font.Font(FONT_PATH, 18)
+
+        # Left: XP Badge
+        xp_badge = pygame.Rect(20, 15, 60, 50)
+        pygame.draw.rect(surf, SECONDARY, xp_badge, border_radius=10)
+        xp_txt = small_font.render(str(self.xp), True, WHITE)
+        surf.blit(xp_txt, (xp_badge.x + 15, xp_badge.y + 8))
+        xp_label = pygame.font.Font(FONT_PATH, 12).render("XP", True, WHITE)
+        surf.blit(xp_label, (xp_badge.x + 18, xp_badge.y + 28))
+
+        # Center: Progress
+        progress_rect = pygame.Rect(WIDTH // 2 - 150, 30, 300, 20)
+        ProgressBar(self.progress, self.total).draw(surf, progress_rect.x, progress_rect.y, progress_rect.w, progress_rect.h)
+        progress_txt = small_font.render(f"{self.progress}/{self.total}", True, LIGHT_TEXT)
+        surf.blit(progress_txt, (progress_rect.x + progress_rect.w + 15, progress_rect.y - 2))
+
+        # Right: Hearts & Streak
+        heart_x = WIDTH - 200
+        for i in range(3):
+            heart_color = RED if i < self.hearts else BORDER_COLOR
+            heart = font.render("❤️", True, heart_color)
+            surf.blit(heart, (heart_x + i * 40, 20))
+
+        if self.streak > 0:
+            fire = font.render("🔥", True, SECONDARY)
+            surf.blit(fire, (WIDTH - 80, 20))
+            streak_txt = small_font.render(str(self.streak), True, LIGHT_TEXT)
+            surf.blit(streak_txt, (WIDTH - 50, 25))
+
+
+class Card:
+    """Duolingo-style card component"""
+
+    def __init__(self, text, x, y, width, height):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.hovered = False
+
+    def draw(self, surf, font, selected=False):
+        bg = PRIMARY if selected else WHITE
+        text_color = WHITE if selected else LIGHT_TEXT
+        pygame.draw.rect(surf, bg, self.rect, border_radius=16)
+        pygame.draw.rect(surf, PRIMARY if selected else BORDER_COLOR, self.rect, 2 if selected else 1, border_radius=16)
+        
+        # Render text with automatic font scaling if needed
+        txt = font.render(self.text, True, text_color)
+        max_width = self.rect.width - 20
+        
+        # If text is too wide, scale down the font
+        if txt.get_width() > max_width:
+            current_size = font.get_height()
+            while current_size > 12 and txt.get_width() > max_width:
+                current_size -= 2
+                scaled_font = pygame.font.Font(FONT_PATH, current_size)
+                txt = scaled_font.render(self.text, True, text_color)
+        
+        surf.blit(txt, txt.get_rect(center=self.rect.center))
+
+    def collide(self, pos):
+        return self.rect.collidepoint(pos)
+
+
+def draw_status(surface, font, text, pos, color=LIGHT_TEXT):
+    label = font.render(text, True, color)
+    surface.blit(label, pos)
+
+
+def render_text_wrapped(font, text, color, max_width):
+    """Render text with automatic word wrapping"""
+    import textwrap
+    words = text.split()
+    lines = []
+    current_line = []
+    
+    for word in words:
+        test_line = ' '.join(current_line + [word])
+        test_surface = font.render(test_line, True, color)
+        
+        if test_surface.get_width() <= max_width:
+            current_line.append(word)
+        else:
+            if current_line:
+                lines.append(' '.join(current_line))
+                current_line = [word]
+            else:
+                # Word too long, force it
+                lines.append(word)
+    
+    if current_line:
+        lines.append(' '.join(current_line))
+    
+    return [font.render(line, True, color) for line in lines]
+
+
+def render_text_fitted(font, text, color, max_width, min_font_size=12):
+    """Render text that fits within max_width, shrinking font if needed"""
+    import pygame
+    current_font = font
+    current_size = font.get_height()
+    
+    while current_size >= min_font_size:
+        test_surface = current_font.render(text, True, color)
+        if test_surface.get_width() <= max_width:
+            return test_surface
+        current_size -= 2
+        current_font = pygame.font.Font(font.get_fonts()[0] if hasattr(font, 'get_fonts') else FONT_PATH, current_size)
+    
+    # If still too long, truncate with ellipsis
+    truncated = text
+    while len(truncated) > 3:
+        truncated = truncated[:-4] + "..."
+        test_surface = current_font.render(truncated, True, color)
+        if test_surface.get_width() <= max_width:
+            return test_surface
+    
+    return current_font.render("...", True, color)
