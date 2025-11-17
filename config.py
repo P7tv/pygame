@@ -1,38 +1,72 @@
-# UI & Game
-WIDTH, HEIGHT, FPS = 1280, 720, 60
-BG, FG = (40, 40, 60), (230, 230, 230)  # สีพื้นหลังและสีตัวอักษร
-ACCENT, WARN, MUTED, CARD, PROGRESS = (100,220,140), (255,120,120), (130,130,150), (50,50,70), (140,180,255)  # สีเน้นต่างๆ
+WIDTH, HEIGHT = 2560, 1440
+FPS = 60
+FONT_PATH = "assets/fonts/ThaiSansNeue-Bold.ttf"
 
-SAVE_PATH = "save.json"
-# ใส่ฟอนต์ไทยจะสวยกว่า (เช่น NotoSansThai). ถ้าไม่มีก็ปล่อย None
-FONT_PATH = None # "assets/fonts/NotoSansThai-Regular.ttf"
+# เส้นทางของไฟล์เสียงที่ใช้แจ้งเตือนในเกม
+SOUND_OK = "assets/ok.wav"
+SOUND_BAD = "assets/bad.wav"
 
-# ASR (Whisper)
-ASR_ENABLED = True
-ASR_MODEL_SIZE = "small" # "tiny"/"base"/"small"/"medium"
-ASR_LANGUAGE = "th"
-ASR_THRESHOLD_OK = 85
-ASR_THRESHOLD_PARTIAL = 70
+# พาเลตต์สีที่ส่วนต่าง ๆ ของ UI เรียกใช้งาน
+WHITE = (255, 255, 255)
+GRAY = (245, 247, 250)
+GREEN = (88, 204, 2)
+BLUE = (28, 176, 246)
+RED = (239, 68, 68)
+YELLOW = (251, 191, 36)
+BLACK = (0, 0, 0)
+ORANGE = (251, 191, 36)
+PINK = (255, 99, 132)
+
+# จำนวนการ์ดที่ต้องการให้ LLM สร้างในแต่ละหมวด
+LESSON_COUNT = 8
+
+# ค่าปรับจูนระบบรู้จำเสียง (Sampling และ Threshold ที่ใช้ใน RapidFuzz)
 SAMPLE_RATE = 16000
 CHANNELS = 1
-MAX_SPEAK_SECONDS = 4.0
+MAX_SPEAK_SECONDS = 5
+ASR_THRESHOLD_OK = 85
+ASR_THRESHOLD_PARTIAL = 65
 
-# Dialects
-DIALECTS = ["central","northern","isan","southern"]
+# รายการสำเนียงที่รองรับและชื่อแสดงผลภาษาไทย
+DIALECTS = ["central", "northern", "isan", "southern"]
 DIALECT_LABELS = {
-"central":"กลาง",
-"northern":"เหนือ (คำเมือง)",
-"isan":"อีสาน",
-"southern":"ใต้",
+    "central": "ภาคกลาง",
+    "northern": "ภาคเหนือ",
+    "isan": "อีสาน",
+    "southern": "ภาคใต้"
 }
-NORMALIZE_MAP = {
-"northern": {
-"กิ๋น":"กิน", "จ๊าด":"มาก", "ลำ":"อร่อย", "ปิ๊ก":"กลับ", "ตี้":"ที่", "ยะ":"ทำ", "ละอ่อน":"เด็ก",
-},
-"isan": {
-"แซบ":"อร่อย", "เด้อ":"", "จัก":"สัก", "อยู่บ่":"อยู่ไหม", "บ่":"ไม่", "หลาย":"มาก", "เข่า":"ข้าว",
-},
-"southern": {
-"หรอย":"อร่อย", "นิ":"นี่", "แล":"ดู", "พรือ":"อย่างไร", "หม้าย":"ไหม", "หล่าว":"แล้ว",
-},
+
+# ข้อมูลหมวดบทเรียนที่ใช้ทั้งในเมนูและระบบสุ่มโจทย์
+CONTENT_CATEGORIES = [
+    {"key": "greetings", "label": "คำทักทายและมารยาทพื้นฐาน"},
+    {"key": "pronouns", "label": "สรรพนามส่วนตัว"},
+    {"key": "directions", "label": "คำบ่งชี้สถานที่และทิศทาง"},
+    {"key": "questions", "label": "คำถามพื้นฐาน (5W1H)"},
+    {"key": "feelings", "label": "คำแสดงความรู้สึก/ความเห็น"},
+    {"key": "daily", "label": "คำเรียกกลุ่มคำในชีวิตประจำวัน"},
+    {"key": "particles", "label": "คำอุทานและคำลงท้าย"},
+]
+DEFAULT_CATEGORY_KEY = CONTENT_CATEGORIES[0]["key"]
+
+# ค่ากำหนดโหมดชาเลนจ์ (จำนวนข้อและหมวดผสม)
+CHALLENGE_LEVELS = {
+    "easy": {
+        "label": "ง่าย",
+        "rounds": 4,
+        "category_mix": 2,
+        "description": "โจทย์สั้น ปน 2 หมวดหมู่",
+    },
+    "medium": {
+        "label": "กลาง",
+        "rounds": 6,
+        "category_mix": 3,
+        "description": "เพิ่มความยากและหมวดหมู่หลากหลาย",
+    },
+    "hard": {
+        "label": "ยาก",
+        "rounds": 8,
+        "category_mix": 4,
+        "description": "โจทย์ยาว + ผสมหมวดแทบทั้งหมด",
+    },
 }
+DEFAULT_CHALLENGE_LEVEL = "easy"
