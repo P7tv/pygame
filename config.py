@@ -70,3 +70,9 @@ CHALLENGE_LEVELS = {
     },
 }
 DEFAULT_CHALLENGE_LEVEL = "easy"
+CHALLENGE_LEVEL_ORDER = ["easy", "medium", "hard"]
+DEFAULT_CHALLENGE_UNLOCK = {
+    "easy": True,
+    "medium": False,
+    "hard": False,
+}

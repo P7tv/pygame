@@ -54,6 +54,7 @@ class LessonScene:
         self.waiting_transcription_job = None
         self._last_wav_path = None
         self.processing_audio = False
+        self.completed = False
 
     def _load_cards(self):
         """Load cards from challenge or standard mode"""
@@ -124,6 +125,8 @@ class LessonScene:
         )
 
         while True:
+            if self.completed:
+                return "SUMMARY"
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     return "EXIT"
@@ -214,9 +217,15 @@ class LessonScene:
         self.game.state.update({"xp": self.xp, "streak": self.streak, "hearts": self.hearts})
         self.index += 1
 
-        if self.index >= len(self.cards) or self.hearts <= 0:
+        finished = self.index >= len(self.cards)
+        failed = self.hearts <= 0
+        if finished or failed:
+            self.completed = True
             self.game.state.update({"streak": self.streak, "xp": self.xp})
             if self.mode == "challenge":
+                level = self.game.state.get("challenge_level")
+                passed = finished and self.hearts > 0
+                self._update_challenge_unlocks(level, passed, perfect=passed and self.hearts == 3)
                 for key in ("mode", "challenge_level", "challenge_mix"):
                     self.game.state.pop(key, None)
 
@@ -409,3 +418,24 @@ class LessonScene:
         """Return True when ASR model is ready for another recording"""
         status = status if status is not None else self.asr.get_status()
         return status in {"loaded", "done"}
+
+    def _update_challenge_unlocks(self, level, passed, perfect=False):
+        """Unlock next challenge level when player passes current one, and mark completed when perfect hearts."""
+        if not level:
+            return
+        unlocked = self.game.state.get("challenge_unlocked") or {}
+        # merge with defaults to ensure keys exist
+        merged = {**DEFAULT_CHALLENGE_UNLOCK, **unlocked}
+        merged[level] = merged.get(level, False) or passed
+        completed = self.game.state.get("challenge_completed") or {}
+        completed[level] = completed.get(level, False) or perfect
+        if passed:
+            try:
+                idx = CHALLENGE_LEVEL_ORDER.index(level)
+            except ValueError:
+                idx = -1
+            if idx >= 0 and idx + 1 < len(CHALLENGE_LEVEL_ORDER):
+                next_level = CHALLENGE_LEVEL_ORDER[idx + 1]
+                merged[next_level] = True
+        self.game.state["challenge_unlocked"] = merged
+        self.game.state["challenge_completed"] = completed

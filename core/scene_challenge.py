@@ -93,44 +93,60 @@ class ChallengeScene:
         mouse_pos = self.game.mouse_pos()
         for level, card, color, title_text in self.level_cards:
             cfg = CHALLENGE_LEVELS[level]
-            locked = not self._is_unlocked(level)
-            card.draw(self.screen, self.label_font, selected=not locked)
-
             card_rect = card.rect
+            completed = self._is_level_completed(level)
+            unlocked = self._is_unlocked(level)
+            locked = not unlocked
+            if locked:
+                bg_color = WHITE
+            elif completed:
+                bg_color = PRIMARY
+            else:
+                bg_color = SECONDARY
+            pygame.draw.rect(self.screen, bg_color, card_rect, border_radius=16)
+            pygame.draw.rect(self.screen, BORDER_COLOR, card_rect, 3, border_radius=16)
+
             # draw title near top of card
-            title_color = color if not locked else (160, 160, 160)
+            if locked:
+                title_color = (80, 80, 80)
+            elif completed:
+                title_color = WHITE
+            else:
+                title_color = (60, 60, 60)
             title = self.card_title_font.render(title_text, True, title_color)
             title_rect = title.get_rect()
             title_rect.centerx = card_rect.centerx
             title_rect.y = card_rect.y + 24
             self.screen.blit(title, title_rect)
-            desc_text = cfg["description"]
-            max_desc_width = card_rect.width - 40
 
-            # Render description with wrapping to avoid overflow
-            desc_color = LIGHT_TEXT if not locked else (140, 140, 140)
+            desc_text = cfg["description"] if unlocked else "ผ่านระดับก่อนหน้าก่อน"
+            if locked:
+                desc_color = LIGHT_TEXT
+            elif completed:
+                desc_color = WHITE
+            else:
+                desc_color = (80, 60, 0)
+            max_desc_width = card_rect.width - 40
             desc_lines = render_text_wrapped(self.desc_font, desc_text, desc_color, max_desc_width)
             text_y = title_rect.bottom + 20
-            if locked:
-                lock_msg = "🔒 ผ่านระดับก่อนหน้าก่อน"
-                lock_lines = render_text_wrapped(self.desc_font, lock_msg, desc_color, max_desc_width)
-                for line in lock_lines[:2]:
-                    self.screen.blit(line, (card_rect.x + 20, text_y))
-                    text_y += line.get_height() + 6
-                continue
-            for line in desc_lines[:2]:  # limit to 2 lines to keep layout tidy
+            for line in desc_lines[:2]:
                 self.screen.blit(line, (card_rect.x + 20, text_y))
                 text_y += line.get_height() + 6
 
             rounds_text = f"{cfg['rounds']} ข้อ • {cfg['category_mix']} หมวด"
-            rounds = self.label_font.render(rounds_text, True, LIGHT_TEXT)
-            # shrink rounds line if needed
+            if locked:
+                rounds_color = LIGHT_TEXT
+            elif completed:
+                rounds_color = WHITE
+            else:
+                rounds_color = (80, 60, 0)
+            rounds = self.label_font.render(rounds_text, True, rounds_color)
             if rounds.get_width() > max_desc_width:
                 current_size = self.label_font.get_height()
                 while current_size > 18 and rounds.get_width() > max_desc_width:
                     current_size -= 2
                     scaled_font = pygame.font.Font(FONT_PATH, current_size)
-                    rounds = scaled_font.render(rounds_text, True, LIGHT_TEXT)
+                    rounds = scaled_font.render(rounds_text, True, rounds_color)
             self.screen.blit(rounds, (card_rect.x + 20, text_y + 10))
 
         # Back button
@@ -146,3 +162,9 @@ class ChallengeScene:
     def _is_unlocked(self, level: str) -> bool:
         unlocked = self.game.state.setdefault("challenge_unlocked", DEFAULT_CHALLENGE_UNLOCK.copy())
         return unlocked.get(level, False)
+
+    def _is_level_completed(self, level: str) -> bool:
+        completed = self.game.state.setdefault(
+            "challenge_completed", {key: False for key in CHALLENGE_LEVEL_ORDER}
+        )
+        return completed.get(level, False)

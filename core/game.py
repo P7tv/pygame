@@ -5,7 +5,7 @@ from config import *
 class Game:
     """คลาสกลางที่ถือสถานะเกมและหมุนเวียน scene ต่าง ๆ"""
 
-    def __init__(self, scenes):
+    def __init__(self, scenes, initial_scene="MENU"):
         pygame.init()
         pygame.display.set_caption("🦉 Learn Thai Dialects")
         self.base_size = (WIDTH, HEIGHT)
@@ -25,10 +25,13 @@ class Game:
             "hearts": 3,
             "dialect": DIALECTS[0],
             "category": DEFAULT_CATEGORY_KEY,
+            "challenge_unlocked": DEFAULT_CHALLENGE_UNLOCK.copy(),
+            "challenge_completed": {key: False for key in CHALLENGE_LEVEL_ORDER},
         }
         self.dialect = self.state["dialect"]
         self.category = self.state["category"]
-        self.switch_scene("MENU")
+        start = initial_scene if initial_scene in self.scene_map else "MENU"
+        self.switch_scene(start)
 
     def _scale_factor(self):
         """คำนวณสัดส่วนระหว่างหน้าต่างจริงกับ canvas base สำหรับปรับตำแหน่งเมาส์"""

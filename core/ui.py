@@ -32,6 +32,13 @@ class Button:
         if self.border_width > 0:
             pygame.draw.rect(surf, BORDER_COLOR, self.rect, self.border_width, border_radius=self.radius)
         txt = font.render(self.label, True, self.fg)
+        max_width = self.rect.width - 20
+        if txt.get_width() > max_width:
+            current_size = font.get_height()
+            while current_size > 12 and txt.get_width() > max_width:
+                current_size -= 2
+                scaled_font = pygame.font.Font(FONT_PATH, current_size)
+                txt = scaled_font.render(self.label, True, self.fg)
         surf.blit(txt, txt.get_rect(center=self.rect.center))
 
     def collide(self, pos):
@@ -172,6 +179,13 @@ class Card:
         pygame.draw.rect(surf, bg, self.rect, border_radius=16)
         pygame.draw.rect(surf, PRIMARY if selected else BORDER_COLOR, self.rect, 2 if selected else 1, border_radius=16)
         txt = font.render(self.text, True, text_color)
+        max_width = self.rect.width - 20
+        if txt.get_width() > max_width:
+            current_size = font.get_height()
+            while current_size > 12 and txt.get_width() > max_width:
+                current_size -= 2
+                scaled_font = pygame.font.Font(FONT_PATH, current_size)
+                txt = scaled_font.render(self.text, True, text_color)
         surf.blit(txt, txt.get_rect(center=self.rect.center))
 
     def collide(self, pos):
@@ -183,3 +197,28 @@ def draw_status(surface, font, text, pos, color=LIGHT_TEXT):
     """helper วาดข้อความสถานะสั้น ๆ บน surface"""
     label = font.render(text, True, color)
     surface.blit(label, pos)
+
+
+def render_text_wrapped(font, text, color, max_width):
+    """ตัดคำอัตโนมัติให้ไม่เกินความกว้างที่กำหนด"""
+    words = text.split()
+    lines = []
+    current = []
+
+    for word in words:
+        candidate = " ".join(current + [word])
+        surf = font.render(candidate, True, color)
+        if surf.get_width() <= max_width:
+            current.append(word)
+        else:
+            if current:
+                lines.append(" ".join(current))
+                current = [word]
+            else:
+                lines.append(word)
+                current = []
+
+    if current:
+        lines.append(" ".join(current))
+
+    return [font.render(line, True, color) for line in lines]

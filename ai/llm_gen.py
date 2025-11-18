@@ -10,7 +10,38 @@ import google.generativeai as genai  # type: ignore
 
 from config import CONTENT_CATEGORIES, DIALECTS, LESSON_COUNT
 
-DEFAULT_MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-2.5-flash")
+DEFAULT_MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-2.0-flash-lite")
+
+CATEGORY_HINTS = {
+    "greetings": [
+        "กระจายสถานการณ์ทักทายตอนเช้า/บ่าย/เย็น การถามสารทุกข์ และการกล่าวลา/ขอบคุณ",
+        "สอดแทรกมารยาทพื้นฐาน เช่น การขอโทษหรือเชื้อเชิญให้ทำกิจกรรมร่วมกัน",
+    ],
+    "pronouns": [
+        "สร้างบริบทที่ต้องใช้สรรพนามบุคคลที่ 1, 2, 3 ทั้งเอกพจน์และพหูพจน์",
+        "แสดงตัวเลือกสรรพนามสุภาพ เท่าเทียม และกันเอง เพื่อเทียบความต่างของแต่ละสำเนียง",
+    ],
+    "directions": [
+        "ให้ผู้เรียนบรรยายเส้นทางที่มีซ้าย/ขวา/ตรงไป/ย้อนกลับ/ใกล้/ไกล และจุดสังเกตสำคัญ",
+        "ผูกสถานการณ์กับสถานที่จริง เช่น ตลาด โรงเรียน สถานีขนส่ง หรือถนนหลัก",
+    ],
+    "questions": [
+        "ครบทุกบทเรียนต้องกระจายคำถาม 5W1H (ใคร, อะไร, ที่ไหน, เมื่อไร, ทำไม, อย่างไร) โดยไม่ซ้ำรูปแบบ",
+        "ใช้สถานการณ์จริง เช่น ถามเส้นทาง สัมภาษณ์ หรือสอบถามเหตุผล",
+    ],
+    "feelings": [
+        "สลับอารมณ์บวก ลบ และกังวล เช่น ดีใจ ผิดหวัง ตื่นเต้น กลัว หรือเห็นต่าง",
+        "ให้ prompt กระตุ้นให้ผู้เรียนอธิบายเหตุผลสั้นๆ ร่วมกับคำแสดงอารมณ์",
+    ],
+    "daily": [
+        "หมุนเวียนกิจวัตรหลัก เช่น รับประทานอาหาร เดินทาง ทำงาน ทำความสะอาด ซื้อของ และพักผ่อน",
+        "ให้สถานการณ์ชัดเจน (เช้า/หลังเลิกงาน/ก่อนนอน) เพื่อให้ targets แตกต่างกัน",
+    ],
+    "particles": [
+        "แต่ละโจทย์ควรเน้นคำลงท้ายหรือคำอุทานต่างกัน เพื่อสื่อความสุภาพ เน้นย้ำ หรืออารมณ์สนุก",
+        "ยกตัวอย่างบริบทที่ทำให้คำลงท้ายมีความหมาย เช่น ขอร้อง ยืนยัน หรือแซวเล่น",
+    ],
+}
 
 
 def _find_project_env() -> Path | None:
@@ -60,16 +91,31 @@ def _category_label(key: str) -> str:
 
 
 def _ensure_dialects(lessons: List[dict], dialects: Sequence[str]) -> List[dict]:
-    output = []
-    for lesson in lessons:
+    output: List[dict] = []
+    for idx, lesson in enumerate(lessons, start=1):
         prompt = str(lesson.get("prompt", "")).strip()
+        if not prompt:
+            raise ValueError(f"lesson {idx} missing prompt text")
         raw_targets = lesson.get("targets") or {}
-        targets = {}
+        targets: dict[str, List[str]] = {}
         for d in dialects:
             vals = raw_targets.get(d)
-            if not isinstance(vals, list) or not vals:
-                vals = raw_targets.get("central", [])
-            targets[d] = [str(v).strip() for v in vals if str(v).strip()]
+            if not isinstance(vals, list):
+                raise ValueError(f"lesson {idx} missing targets for dialect '{d}'")
+            cleaned = [str(v).strip() for v in vals if str(v).strip()]
+            if len(cleaned) < 2:
+                raise ValueError(f"lesson {idx} dialect '{d}' needs >=2 phrases")
+            targets[d] = cleaned[:3]
+        central_words = targets.get("central")
+        if central_words:
+            central_set = {word for word in central_words if word}
+            for d, words in targets.items():
+                if d == "central":
+                    continue
+                if set(words) == central_set:
+                    raise ValueError(
+                        f"lesson {idx} dialect '{d}' duplicates central targets"
+                    )
         output.append({"prompt": prompt, "targets": targets})
     return output
 
@@ -81,30 +127,47 @@ def generate_lessons(category_key: str, count: int = LESSON_COUNT, dialects: Ite
     model = _get_model()
     dialects = list(dialects)
     category_label = _category_label(category_key)
+    hint_lines = CATEGORY_HINTS.get(category_key)
+    hint_block = ""
+    if hint_lines:
+        bullet_lines = "\n".join(f"          • {line}" for line in hint_lines)
+        hint_block = f"\n        เงื่อนไขเฉพาะหมวดนี้:\n{bullet_lines}\n"
     instructions = textwrap.dedent(
         f"""
-        คุณคือผู้ออกแบบบทเรียนเสียงสำเนียงไทยสำหรับเกมแนว Duolingo
-        - หมวดหมู่บทเรียน: "{category_label}"
-        - สร้างบทเรียน {count} ข้อในรูปแบบ JSON array เท่านั้น
-        - แต่ละบทเรียนต้องมีฟิลด์ "prompt" (เป็นประโยคชวนพูดสั้น ๆ ภาษาไทย) และ "targets"
-        - "targets" คือ map ของสำเนียง: {", ".join(dialects)}
-        - targets ของแต่ละภาคเป็น list 2-3 คำ/วลีสั้น ที่เกี่ยวข้องกับหมวดหมู่ และสะท้อนภาษาถิ่นจริง
-        - ห้ามให้คำแปลภาษาอังกฤษ หรือคำอธิบายยาวนอกเหนือ JSON
-        - ใช้โทนสนุก เป็นกันเอง และชวนให้ผู้เล่นพูดออกเสียง
-        - ทุก prompt ต้องกล่าวถึงหมวดหมู่ "{category_label}" หรือสถานการณ์ที่สอดคล้อง
+        บทบาท: คุณคือหัวหน้าทีมออกแบบบทเรียนสำเนียงไทยสไตล์ Duolingo ที่เน้นความถูกต้องของภาษาถิ่น
+        ข้อมูลอินพุต:
+          • หมวดหมู่บทเรียน: "{category_label}"
+          • สำเนียงที่ต้องครอบคลุม: {", ".join(dialects)}
+          • จำนวนบทเรียนที่ต้องผลิต: {count}
 
-        ตัวอย่างโครงสร้างที่ต้องการ:
+        เป้าหมาย: สร้าง JSON array ของบทเรียนที่สมจริง ครบถ้วน และพร้อมใช้งานได้ทันทีในเกมฝึกพูด
+        {hint_block}
+
+        กรอบการทำงาน (ให้เหตุผลในใจและแสดงเฉพาะผลลัพธ์ JSON):
+          1. วิเคราะห์หมวดหมู่ "{category_label}" แล้วร่างสถานการณ์หรือบทสนทนาที่เป็นกลาง (ไม่ยึดสำเนียงใดสำเนียงหนึ่ง) {count} แบบ โดยไม่มีคำซ้ำ
+          2. สำหรับแต่ละสถานการณ์ ให้เขียน prompt ภาษาไทยสั้นๆ ชวนพูด และจัดทำ targets ต่อสำเนียงดังนี้:
+             • แต่ละสำเนียงต้องมี 2-3 คำ/วลีที่ผู้เรียนสามารถพูดตามได้ทันที
+             • ใช้คำท้องถิ่นจริง หลีกเลี่ยงคำแต่งหรือคำที่ไม่ตรงบริบทหมวดหมู่ และหลีกเลี่ยงการซ้ำคำกับสำเนียงอื่น
+             • Prompt ต้องเล่าเหตุการณ์เป็นกลาง ใช้ได้กับทุกภาค (ห้ามใช้ประโยคอย่าง "แบบคนภาคกลาง" หรือ "แบบคนเหนือ") แล้วปล่อยให้ targets แสดงความต่างของแต่ละสำเนียง
+             • ห้ามใส่คำแปลภาษาอังกฤษหรือคำอธิบายยาว
+          3. ตรวจสอบก่อนส่งว่า
+             • มีครบ {count} บทเรียน
+             • ทุก dialect key ปรากฏในทุกบทเรียน และรายการคำของแต่ละ dialect ไม่ซ้ำกับ dialect อื่น
+             • คำตอบไม่มั่ว, ไม่ซ้ำ prompt, และสอดคล้องกับสถานการณ์
+
+        รูปแบบผลลัพธ์: ส่ง JSON array เท่านั้น โดยใช้โครงสร้าง:
         [
           {{
-            "prompt": "ลองทักทายแบบคนอีสานดูหน่อย!",
+            "prompt": "...",
             "targets": {{
-              "central": ["สวัสดีครับ", "สวัสดีค่ะ"],
-              "northern": ["สวัสดีเจ้า", "สวัสดีครับเจ้า"],
-              "isan": ["สวัสดีเด้อ", "เด้อ สวัสดี"],
-              "southern": ["หวัดดีแรง", "สวัสดีแรง"]
+              "central": ["...", "..."],
+              "northern": ["..."],
+              "isan": ["..."],
+              "southern": ["..."]
             }}
           }}
         ]
+        ห้ามตอบคำอื่นนอกเหนือ JSON
         """
     ).strip()
 
@@ -129,7 +192,10 @@ def generate_lessons(category_key: str, count: int = LESSON_COUNT, dialects: Ite
         raise RuntimeError(f"Gemini returned invalid JSON: {exc}") from exc
     if not isinstance(data, list) or not data:
         raise RuntimeError("Gemini response does not contain lesson list")
-    cleaned = _ensure_dialects(data, dialects)
+    try:
+        cleaned = _ensure_dialects(data, dialects)
+    except ValueError as exc:
+        raise RuntimeError(f"Gemini returned invalid lesson data: {exc}") from exc
     return cleaned[:count]
 
 

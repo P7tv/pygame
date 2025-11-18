@@ -15,8 +15,8 @@ class MenuScene:
         # ฟอนต์หลักที่ใช้ในหัวข้อ ป้าย และปุ่ม
         self.title_font = pygame.font.Font(FONT_PATH, 64)
         self.subtitle_font = pygame.font.Font(FONT_PATH, 32)
-        self.label_font = pygame.font.Font(FONT_PATH, 28)
-        self.button_font = pygame.font.Font(FONT_PATH, 28)
+        self.label_font = pygame.font.Font(FONT_PATH, 32)
+        self.button_font = pygame.font.Font(FONT_PATH, 40)
 
         # ค่าที่เลือกล่าสุด (ใช้ highlight ให้ผู้เล่นเห็น)
         self.selected_dialect = self.game.state.get("dialect", DIALECTS[0])
@@ -33,32 +33,32 @@ class MenuScene:
     def _create_buttons(self):
         """จัดเลย์เอาต์ปุ่มหลัก/ปุ่มสำเนียงและการ์ดหมวดหมู่"""
         # ปุ่มคำสั่งหลักด้านล่าง 3 ปุ่ม
-        btn_width = 280
-        btn_height = 60
-        btn_gap = 20
+        btn_width = 500
+        btn_height = 130
+        btn_gap = 50
         total_w = btn_width * 3 + btn_gap * 2
         start_x = (WIDTH - total_w) // 2
 
         self.lesson_btn = Button(
-            pygame.Rect(start_x, HEIGHT - 150, btn_width, btn_height),
+            pygame.Rect(start_x, HEIGHT - 260, btn_width, btn_height),
             "เริ่มบทเรียน",
             PRIMARY, WHITE
         )
         self.challenge_btn = Button(
-            pygame.Rect(start_x + btn_width + btn_gap, HEIGHT - 150, btn_width, btn_height),
+            pygame.Rect(start_x + btn_width + btn_gap, HEIGHT - 260, btn_width, btn_height),
             "โหมดชาเลนจ์",
             SECONDARY, WHITE
         )
         self.free_btn = Button(
-            pygame.Rect(start_x + (btn_width + btn_gap) * 2, HEIGHT - 150, btn_width, btn_height),
+            pygame.Rect(start_x + (btn_width + btn_gap) * 2, HEIGHT - 260, btn_width, btn_height),
             "พูดอิสระ",
             ACCENT, WHITE
         )
 
         # ปุ่มเลือกสำเนียง 4 ปุ่มเรียงแนวนอน
-        dialect_btn_width = 140
-        dialect_btn_height = 50
-        dialect_btn_gap = 16
+        dialect_btn_width = 260
+        dialect_btn_height = 100
+        dialect_btn_gap = 36
         total_d_w = dialect_btn_width * 4 + dialect_btn_gap * 3
         start_dx = (WIDTH - total_d_w) // 2
 
@@ -66,18 +66,18 @@ class MenuScene:
         colors = [PRIMARY, ACCENT, SECONDARY, (200, 50, 100)]
         for i, (key, color) in enumerate(zip(DIALECTS, colors)):
             btn = Button(
-                pygame.Rect(start_dx + i * (dialect_btn_width + dialect_btn_gap), 200, dialect_btn_width, dialect_btn_height),
+                pygame.Rect(start_dx + i * (dialect_btn_width + dialect_btn_gap), 230, dialect_btn_width, dialect_btn_height),
                 DIALECT_LABELS[key],
-                color, WHITE, radius=10
+                color, WHITE, radius=16
             )
             self.dialect_buttons.append((key, btn))
 
         # การ์ดหมวดหมู่จัดเป็นตาราง 3 คอลัมน์
         self.category_cards = []
         cols = 3
-        card_width = 180
-        card_height = 100
-        card_gap = 24
+        card_width = 280
+        card_height = 160
+        card_gap = 36
         total_cw = card_width * cols + card_gap * (cols - 1)
         start_cx = (WIDTH - total_cw) // 2
 
@@ -85,7 +85,7 @@ class MenuScene:
             row = idx // cols
             col = idx % cols
             x = start_cx + col * (card_width + card_gap)
-            y = 320 + row * (card_height + card_gap)
+            y = 390 + row * (card_height + card_gap)
             card = Card(cat["label"].split()[0], x, y, card_width, card_height)
             self.category_cards.append((cat, card))
 
