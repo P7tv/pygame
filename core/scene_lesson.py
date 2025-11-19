@@ -10,7 +10,7 @@ from ai.llm_gen import generate_lessons
 
 
 class LessonScene:
-    """ฉากหลักของบทเรียน: วนการ์ด, ฟังเสียงผู้เล่น, ให้ฟีดแบ็กแบบ Duolingo"""
+    """ฉากหลักของบทเรียน: วนการ์ด ฝึกพูด และให้ feedback ตามคะแนนความใกล้เคียงเสียง"""
 
     def __init__(self, game):
         self.game = game
@@ -29,9 +29,9 @@ class LessonScene:
         self.category_key = self.game.state.get("category", DEFAULT_CATEGORY_KEY)
         self.category_label = next((c["label"] for c in CONTENT_CATEGORIES if c["key"] == self.category_key), self.category_key)
 
-        self.cards = []
-        self.generation_error = None
-        self._load_cards()
+        self.cards = []  # โครงสร้างการ์ดแต่ละใบ: {"prompt": str, "targets": {"dialect": [คำตอบ...]}}
+        self.generation_error = None  # เก็บข้อความ error จากการสร้างการ์ดด้วย LLM
+        self._load_cards()  # โหลดข้อมูลบทเรียนตามโหมด/หมวดที่เลือก
 
         self.index = 0
         self.asr = PathummaASR()  # ผู้จัดการ ASR ที่รันโมเดลใน worker process แยก
@@ -51,12 +51,12 @@ class LessonScene:
         if not self.cards:
             raise RuntimeError("ไม่พบบทเรียนที่ใช้งานได้")
 
-        self.header = HeaderUI(self.xp, self.streak, self.hearts, self.dialect, self.index, len(self.cards))
+        self.header = HeaderUI(self.xp, self.streak, self.hearts, self.dialect, self.index, len(self.cards))  # แสดงสถิติด้านบน
 
         # ธงควบคุมการส่งงานไป worker โดยไม่บล็อกลูปหลัก
-        self.waiting_transcription_job = None
-        self._last_wav_path = None
-        self.processing_audio = False
+        self.waiting_transcription_job = None  # เก็บ job id ของงานถอดเสียงที่กำลังรอ
+        self._last_wav_path = None  # ใช้ debug/ตรวจสอบไฟล์เสียงล่าสุด
+        self.processing_audio = False  # True ระหว่างที่กำลังเขียนไฟล์/สร้าง job
 
     def _load_cards(self):
         """โหลดชุดการ์ดจากโหมดที่เลือก (ปกติหรือชาเลนจ์) แล้วสุ่มลำดับ"""
@@ -65,15 +65,15 @@ class LessonScene:
         else:
             self._load_standard_cards()
         self.cards = list(self.cards)
-        random.shuffle(self.cards)
+        random.shuffle(self.cards)  # สุ่มการ์ดเพื่อไม่ให้เรียงซ้ำเดิม
 
     def _load_standard_cards(self):
         """โหลดการ์ดบทเรียนปกติ: ถ้าไม่มีไฟล์ให้เรียก LLM สร้างแล้วเซฟ"""
         cat_file = category_path(self.category_key)
         try:
             if not os.path.exists(cat_file):
-                generated = generate_lessons(self.category_key, LESSON_COUNT)
-                save_lessons(cat_file, generated)
+                generated = generate_lessons(self.category_key, LESSON_COUNT)  # เรียก LLM สร้างบทเรียนใหม่
+                save_lessons(cat_file, generated)  # เก็บไฟล์ไว้ใช้คราวต่อไป
                 self.cards = list(generated)
                 return
         except Exception as exc:
@@ -88,7 +88,7 @@ class LessonScene:
     def _load_challenge_cards(self):
         """โหลดการ์ดตามระดับความยาก โดยผสมหมวดหลาย ๆ หมวดตาม config"""
         level_cfg = CHALLENGE_LEVELS.get(self.challenge_level, CHALLENGE_LEVELS[DEFAULT_CHALLENGE_LEVEL])
-        mix = self.game.state.get("challenge_mix")
+        mix = self.game.state.get("challenge_mix")  # ลิสต์หมวดที่สุ่มไว้ตั้งแต่หน้าชาเลนจ์
         if not mix:
             available = [c["key"] for c in CONTENT_CATEGORIES]
             random.shuffle(available)
@@ -98,7 +98,7 @@ class LessonScene:
         cards = []
         for key in mix:
             try:
-                lessons, _ = load_lessons(category_key=key, preferred=category_path(key))
+                lessons, _ = load_lessons(category_key=key, preferred=category_path(key))  # โหลดการ์ดจากแต่ละหมวดที่สุ่มไว้
                 random.shuffle(lessons)
                 cards.extend(lessons)
             except FileNotFoundError:
@@ -128,6 +128,7 @@ class LessonScene:
         )
 
         while True:
+            # ลูปหลัก: รับ event, ประมวลผล ASR, แล้ววาด UI
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     return "EXIT"
@@ -138,17 +139,19 @@ class LessonScene:
                         return "MENU"
                     if e.key == pygame.K_m:
                         if self._is_asr_ready():
+                            # ปุ่มลัดสำหรับเริ่ม/หยุดอัดเสียง (สะดวกเวลาใช้คีย์บอร์ด)
                             self._toggle_recording()
 
-                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None  # ตำแหน่งเมาส์ในระบบ canvas
+                pointer = self.game.logical_pos(e.pos) if hasattr(e, "pos") else None  # ตำแหน่งเมาส์ในระบบ canvas (ใช้ตรวจปุ่ม)
                 # ปุ่มอัดเสียงไม่มีเสียง hover เพื่อไม่ให้รบกวน (เล่นเฉพาะตอนคลิก)
 
                 if e.type == pygame.MOUSEBUTTONDOWN and pointer:
                     if self.record_button.rect.collidepoint(pointer) and self._is_asr_ready():
+                        # คลิกปุ่มสีเขียวด้านล่างเพื่ออัดเสียง (ตรวจ ready ก่อนทุกครั้ง)
                         self._toggle_recording()
 
             self.screen.fill(WHITE)
-            # ตรวจ queue งานถอดเสียงโดยไม่บล็อกเฟรม
+            # ตรวจ queue งานถอดเสียงโดยไม่บล็อกเฟรม เพื่อจับผลลัพธ์ทันทีที่เสร็จ
             if self.waiting_transcription_job is not None:
                 status, text = self.asr.get_result(self.waiting_transcription_job)
                 if status != "pending":
@@ -176,6 +179,7 @@ class LessonScene:
             self.processing_audio = True
 
             def _stop_and_request():
+                """ฟังก์ชันใน thread แยก: หยุด stream -> บันทึกไฟล์ -> ส่งงานถอดเสียง"""
                 try:
                     wav = self.rec.stop_to_wav()
                     self._last_wav_path = wav
@@ -198,8 +202,8 @@ class LessonScene:
         """ประเมินผลคำตอบและอัปเดต XP/streak/หัวใจ พร้อมเล่นเสียง"""
         targets = self.cards[self.index]["targets"].get(self.dialect, [])
         kind, score = self.evaluate(text, targets)
-        self.feedback = (kind, score, text)
-        self.feedback_time = time.time()
+        self.feedback = (kind, score, text)  # เก็บผลลัพธ์ล่าสุดไว้ใช้ใน overlay
+        self.feedback_time = time.time()  # ใช้กำหนดระยะเวลาการแสดงผล
 
         # เลือกเสียงตอบรับตามผลให้ฟีดแบ็กชัดเจน
         sound_mgr = SoundManager()
@@ -215,12 +219,13 @@ class LessonScene:
             self.streak = 0
             sound_mgr.play_bad()
 
-        self.game.state.update({"xp": self.xp, "streak": self.streak, "hearts": self.hearts})
-        self.index += 1
+        self.game.state.update({"xp": self.xp, "streak": self.streak, "hearts": self.hearts})  # sync สถานะกลับไปยัง game state
+        self.index += 1  # เลื่อนไปการ์ดถัดไป
 
         if self.index >= len(self.cards) or self.hearts <= 0:
             self.game.state.update({"streak": self.streak, "xp": self.xp})
             if self.mode == "challenge":
+                # จบโหมด challenge แล้ว คืน state ให้กลับเป็นค่า default
                 for key in ("mode", "challenge_level", "challenge_mix"):
                     self.game.state.pop(key, None)
 
@@ -230,7 +235,7 @@ class LessonScene:
         self.header.draw(self.screen)
         # มุมขวาบนแสดงสถานะ ASR ให้รู้ว่าโมเดลพร้อมบันทึกหรือยัง
         status = self.asr.get_status()
-        ready = self._is_asr_ready(status)
+        ready = self._is_asr_ready(status)  # ใช้กำหนดว่าปุ่มอัดเสียงควรกดได้หรือไม่
         small = pygame.font.Font(FONT_PATH, 18)
         status_txt = small.render(f"ASR: {status}", True, LIGHT_TEXT)
         status_r = status_txt.get_rect()
@@ -249,7 +254,7 @@ class LessonScene:
             self._draw_completion()
             return
 
-        card = self.cards[self.index]
+        card = self.cards[self.index]  # การ์ดปัจจุบันที่ผู้เล่นต้องตอบตาม prompt/targets
 
         # การ์ดสีขาวพร้อมเงาแบบ Duolingo
         card_rect = pygame.Rect(200, 180, WIDTH - 400, 500)
@@ -266,7 +271,7 @@ class LessonScene:
         self.screen.blit(prompt, (card_rect.x + 40, card_rect.y + 90))
 
         # แสดงคำตอบเป้าหมายตามสำเนียงเพื่อให้ผู้เล่นเทียบ
-        targets = card["targets"].get(self.dialect, [])
+        targets = card["targets"].get(self.dialect, [])  # list คำตอบที่ถูกต้องสำหรับสำเนียงที่เลือก
         y_offset = card_rect.y + 280
         target_label = self.label_font.render("เป้าหมายการตอบ:", True, LIGHT_TEXT)
         self.screen.blit(target_label, (card_rect.x + 40, y_offset))
